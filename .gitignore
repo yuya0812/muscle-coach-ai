@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+
+# Environment files (secrets)
+.env
+.env.*
+!.env.example
+
+# Build output
+/public/
+functions/lib/
+liff-app/dist/
+
+# Logs
+*.log
+firebase-debug.log
+firestore-debug.log
+
+# Firebase
+.firebase/
+.firebaserc.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+
+# Personal/local notes (Company secretary skill)
+.company/
+
+# Design handoff archive (extracted into design_handoff_ui_redesign/)
+Ai_.zip
