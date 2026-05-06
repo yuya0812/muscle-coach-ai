@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>AIトレーナー — UI Prototype</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0e1018;
+      --surface: #181c28;
+      --surface2: #1e2333;
+      --border: rgba(255,255,255,0.07);
+      --border-md: rgba(255,255,255,0.12);
+      --primary: #06C755;
+      --primary-dim: rgba(6,199,85,0.1);
+      --primary-border: rgba(6,199,85,0.28);
+      --text: #eef1f8;
+      --text-muted: #6b7385;
+      --text-faint: #2e3347;
+      --danger: #ff4560;
+      --gold: #e8b800;
+      --gold-dim: rgba(232,184,0,0.1);
+      --gold-border: rgba(232,184,0,0.22);
+    }
+    html, body { background: #080a10; color: var(--text); font-family: 'Noto Sans JP', sans-serif; -webkit-font-smoothing: antialiased; overscroll-behavior: none; }
+    #root { display: flex; justify-content: center; min-height: 100dvh; background: #080a10; }
+    .phone { width: 100%; max-width: 390px; min-height: 100dvh; background: var(--bg); display: flex; flex-direction: column; position: relative; }
+    .page-wrap { flex: 1; overflow-y: auto; padding: 16px 16px 88px; -webkit-overflow-scrolling: touch; }
+    .fade-up { animation: fadeUp 0.22s ease both; }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    button, input { font-family: 'Noto Sans JP', sans-serif; }
+    ::-webkit-scrollbar { width: 0; }
+    input[type="date"]::-webkit-calendar-picker-indicator,
+    input[type="time"]::-webkit-calendar-picker-indicator { filter: invert(0.6); }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<!-- ── Script 1: Shared UI ───────────────────────────────── -->
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+/* SVG Icons */
+const Ico = ({ d, size=22, vb="0 0 24 24" }) => (
+  <svg width={size} height={size} viewBox={vb} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" dangerouslySetInnerHTML={{__html: d}} />
+)
+const IcoHome    = () => <Ico d='<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>' />
+const IcoPlus    = () => <Ico d='<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>' />
+const IcoCal     = () => <Ico d='<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>' />
+const IcoGear    = () => <Ico d='<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>' />
+const IcoCrown   = () => <Ico d='<path d="M2 20h20M4 20L2 8l5 4 5-6 5 6 5-4-2 12H4z"/>' />
+const IcoBot     = () => <Ico size={20} d='<rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><line x1="12" y1="7" x2="12" y2="11"/><line x1="8" y1="15" x2="8" y2="17"/><line x1="16" y1="15" x2="16" y2="17"/>' />
+const IcoArrow   = () => <Ico size={16} d='<line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>' />
+const IcoCheck   = () => <Ico size={11} d='<polyline points="20 6 9 17 4 12"/>' />
+
+/* Header */
+function Header() {
+  return (
+    <header style={{ height:52, display:'flex', alignItems:'center', padding:'0 18px', borderBottom:'1px solid var(--border)', background:'var(--bg)', position:'sticky', top:0, zIndex:100 }}>
+      <span style={{ fontSize:18, fontWeight:800, letterSpacing:'-0.02em' }}>
+        Muscle<span style={{ color:'var(--primary)' }}>AI</span>
+      </span>
+    </header>
+  )
+}
+
+/* BottomNav */
+const TABS = [
+  { id:'dashboard',     Icon:IcoHome,  label:'ホーム' },
+  { id:'workout-input', Icon:IcoPlus,  label:'記録' },
+  { id:'workout-log',   Icon:IcoCal,   label:'履歴' },
+  { id:'profile',       Icon:IcoGear,  label:'設定' },
+  { id:'subscribe',     Icon:IcoCrown, label:'プラン' },
+]
+function BottomNav({ page, go }) {
+  if (page === 'onboarding') return null
+  return (
+    <nav style={{ position:'sticky', bottom:0, zIndex:100, background:'var(--surface)', borderTop:'1px solid var(--border)', display:'flex' }}>
+      {TABS.map(({ id, Icon, label }) => {
+        const active = page === id
+        return (
+          <button key={id} onClick={() => go(id)} style={{
+            flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+            padding:'9px 0 7px', border:'none', background:'none',
+            color: active ? 'var(--primary)' : 'var(--text-muted)', gap:3, position:'relative',
+          }}>
+            {active && <span style={{ position:'absolute', top:0, left:'50%', transform:'translateX(-50%)', width:22, height:2.5, background:'var(--primary)', borderRadius:'0 0 3px 3px' }} />}
+            <Icon />
+            <span style={{ fontSize:10, fontWeight: active ? 700 : 400 }}>{label}</span>
+          </button>
+        )
+      })}
+    </nav>
+  )
+}
+
+/* PlanBadge */
+function PlanBadge({ plan }) {
+  const p = plan === 'premium'
+  return (
+    <span style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'3px 10px', borderRadius:999, fontSize:11, fontWeight:700, background: p ? 'var(--gold-dim)' : 'var(--surface2)', color: p ? 'var(--gold)' : 'var(--text-muted)', border:`1px solid ${p ? 'var(--gold-border)' : 'var(--border)'}` }}>
+      {p ? '★ PREMIUM' : 'FREE'}
+    </span>
+  )
+}
+
+/* Loading */
+function Loading({ msg='' }) {
+  return (
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:60, gap:16 }}>
+      <div style={{ width:30, height:30, borderRadius:'50%', border:'3px solid var(--border-md)', borderTopColor:'var(--primary)', animation:'spin 0.75s linear infinite' }} />
+      {msg && <span style={{ color:'var(--text-muted)', fontSize:13 }}>{msg}</span>}
+    </div>
+  )
+}
+
+Object.assign(window, { useState, useEffect, useRef, Header, BottomNav, PlanBadge, Loading, IcoBot, IcoArrow, IcoCheck })
+</script>
+
+<!-- ── Script 2: Pages A (Onboarding, Dashboard, WorkoutInput) ── -->
+<script type="text/babel">
+const { useState: uS, useEffect: uE, useRef: uR } = React
+
+/* ── Mock data ── */
+const MOCK = {
+  weeklyCount: 4,
+  remaining: 3,
+  bodyPartFreq: { 胸:3, 背中:2, 脚:3, 肩:1, 腕:2, 体幹:1 },
+  progress: {
+    labels: ['1月','2月','3月','4月'],
+    datasets: [
+      { label:'ベンチプレス', data:[60,65,67.5,70] },
+      { label:'スクワット',   data:[80,85,90,95] },
+    ]
+  },
+  recent: [
+    { date:'4月24日 (金)', exs:[{ n:'ベンチプレス', w:70, r:8, s:4 },{ n:'インクラインベンチ', w:55, r:10, s:3 }] },
+    { date:'4月22日 (水)', exs:[{ n:'スクワット', w:90, r:5, s:5 },{ n:'デッドリフト', w:100, r:5, s:3 }] },
+    { date:'4月20日 (月)', exs:[{ n:'ショルダープレス', w:40, r:10, s:4 }] },
+  ]
+}
+
+/* ── Onboarding ── */
+function OnboardingPage({ go }) {
+  const cardStyle = { background:'var(--surface)', borderRadius:16, padding:'16px 18px', border:'1px solid var(--border)' }
+  return (
+    <div className="fade-up" style={{ minHeight:'100dvh', display:'flex', flexDirection:'column', padding:'0 20px 40px' }}>
+      {/* Hero */}
+      <div style={{ textAlign:'center', padding:'52px 0 36px' }}>
+        <div style={{ width:72, height:72, borderRadius:20, background:'var(--primary-dim)', border:'1px solid var(--primary-border)', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 22px' }}>
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><line x1="12" y1="7" x2="12" y2="11"/>
+            <line x1="8" y1="15" x2="8" y2="17"/><line x1="16" y1="15" x2="16" y2="17"/>
+          </svg>
+        </div>
+        <h1 style={{ fontSize:26, fontWeight:800, color:'var(--text)', marginBottom:10, letterSpacing:'-0.02em', lineHeight:1.3 }}>
+          マッスルコーチAIへ<br />ようこそ！
+        </h1>
+        <p style={{ fontSize:13, color:'var(--text-muted)', lineHeight:1.65 }}>AIがあなた専属のパーソナルトレーナーになります</p>
+      </div>
+
+      {/* How it works */}
+      <p style={{ fontSize:11, fontWeight:700, color:'var(--text-muted)', letterSpacing:'0.08em', textAlign:'center', marginBottom:14 }}>使い方</p>
+      <div style={{ display:'flex', flexDirection:'column', gap:10, marginBottom:24 }}>
+        {[
+          { num:'01', accent:'var(--primary)', title:'LINE でAIコーチと会話', items:['今日のメニューを提案してもらう','フォームや重量のアドバイスをもらう','停滞期の打開策を相談する'] },
+          { num:'02', accent:'#3b82f6',        title:'このアプリでデータ管理',  items:['トレーニングを記録する','グラフで成長を振り返る','プランの確認・変更をする'] },
+        ].map(c => (
+          <div key={c.num} style={cardStyle}>
+            <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
+              <span style={{ fontSize:11, fontWeight:800, color:c.accent, letterSpacing:'0.06em' }}>{c.num}</span>
+              <span style={{ width:1, height:14, background:'var(--border-md)' }} />
+              <span style={{ fontSize:14, fontWeight:700, color:'var(--text)' }}>{c.title}</span>
+            </div>
+            <ul style={{ listStyle:'none' }}>
+              {c.items.map(it => (
+                <li key={it} style={{ fontSize:13, color:'var(--text-muted)', display:'flex', gap:8, padding:'3px 0' }}>
+                  <span style={{ color:c.accent, flexShrink:0 }}>·</span>{it}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+
+      {/* CTA */}
+      <div style={{ background:'var(--primary-dim)', border:'1px solid var(--primary-border)', borderRadius:18, padding:'20px 18px', marginBottom:0 }}>
+        <p style={{ fontSize:14, fontWeight:700, color:'var(--primary)', marginBottom:6 }}>まずプロフィールを設定しましょう</p>
+        <p style={{ fontSize:12, color:'var(--text-muted)', marginBottom:18, lineHeight:1.6 }}>目標や使える器具を教えると、AIのアドバイスがあなた専用になります</p>
+        <button onClick={() => go('profile')} style={{ width:'100%', padding:14, border:'none', borderRadius:12, background:'var(--primary)', color:'#fff', fontSize:14, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+          プロフィールを設定する <window.IcoArrow />
+        </button>
+      </div>
+      <button onClick={() => go('dashboard')} style={{ marginTop:16, background:'none', border:'none', color:'var(--text-muted)', fontSize:13, textDecoration:'underline', cursor:'pointer', padding:'8px 0' }}>
+        スキップしてホームへ
+      </button>
+    </div>
+  )
+}
+
+/* ── Dashboard ── */
+function DashboardPage({ go }) {
+  const [period, setPeriod] = uS('1m')
+  const radarRef = uR(null), lineRef = uR(null)
+  const rChart = uR(null), lChart = uR(null)
+  const rem = MOCK.remaining
+
+  const chartBase = {
+    responsive:true, maintainAspectRatio:false,
+    plugins:{ legend:{ labels:{ color:'#6b7385', font:{ size:11 }, padding:14, boxWidth:12 } } }
+  }
+
+  uE(() => {
+    if (!radarRef.current) return
+    if (rChart.current) rChart.current.destroy()
+    rChart.current = new Chart(radarRef.current, {
+      type:'radar',
+      data:{
+        labels: Object.keys(MOCK.bodyPartFreq),
+        datasets:[{ label:'頻度', data:Object.values(MOCK.bodyPartFreq), backgroundColor:'rgba(6,199,85,0.12)', borderColor:'#06C755', borderWidth:2, pointBackgroundColor:'#06C755', pointRadius:4 }]
+      },
+      options:{ ...chartBase, plugins:{ legend:{ display:false } }, scales:{ r:{ beginAtZero:true, grid:{ color:'rgba(255,255,255,0.06)' }, ticks:{ color:'#6b7385', backdropColor:'transparent', font:{ size:10 } }, pointLabels:{ color:'#c8cde0', font:{ size:12, weight:'600' } } } } }
+    })
+    return () => rChart.current?.destroy()
+  }, [])
+
+  uE(() => {
+    if (!lineRef.current) return
+    if (lChart.current) lChart.current.destroy()
+    const colors = ['#06C755','#3b82f6']
+    lChart.current = new Chart(lineRef.current, {
+      type:'line',
+      data:{
+        labels: MOCK.progress.labels,
+        datasets: MOCK.progress.datasets.map((ds, i) => ({ ...ds, borderColor:colors[i%2], backgroundColor:'transparent', tension:0.35, pointRadius:4, pointBackgroundColor:colors[i%2], borderWidth:2.5 }))
+      },
+      options:{ ...chartBase, scales:{ x:{ grid:{ color:'rgba(255,255,255,0.05)' }, ticks:{ color:'#6b7385', font:{ size:11 } } }, y:{ grid:{ color:'rgba(255,255,255,0.05)' }, ticks:{ color:'#6b7385', font:{ size:11 } } } } }
+    })
+    return () => lChart.current?.destroy()
+  }, [period])
+
+  const card = (children, mb=12) => (
+    <div style={{ background:'var(--surface)', borderRadius:18, padding:16, border:'1px solid var(--border)', marginBottom:mb }}>{children}</div>
+  )
+  const secLabel = t => <p style={{ fontSize:13, fontWeight:700, color:'var(--text)', marginBottom:14 }}>{t}</p>
+
+  return (
+    <div className="fade-up">
+      {/* Weekly summary */}
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:16 }}>
+        <div>
+          <p style={{ fontSize:12, color:'var(--text-muted)', marginBottom:4 }}>今週のトレーニング</p>
+          <p style={{ fontSize:40, fontWeight:800, letterSpacing:'-0.03em', lineHeight:1, color:'var(--text)' }}>
+            {MOCK.weeklyCount}<span style={{ fontSize:16, color:'var(--text-muted)', marginLeft:4 }}>回</span>
+          </p>
+        </div>
+        <div style={{ background:'var(--gold-dim)', border:'1px solid var(--gold-border)', borderRadius:12, padding:'10px 14px', textAlign:'center' }}>
+          <p style={{ fontSize:10, fontWeight:700, color:'var(--gold)', marginBottom:3 }}>今月の残り</p>
+          <p style={{ fontSize:26, fontWeight:800, color:'var(--gold)', lineHeight:1 }}>{rem}<span style={{ fontSize:13 }}>回</span></p>
+        </div>
+      </div>
+
+      {/* AI Coach Card */}
+      <div style={{ background:'var(--surface)', borderRadius:18, padding:18, border:'1px solid var(--border)', marginBottom:12, position:'relative', overflow:'hidden' }}>
+        <div style={{ position:'absolute', top:-30, right:-30, width:120, height:120, borderRadius:'50%', background:'var(--primary-dim)', pointerEvents:'none' }} />
+        <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:14 }}>
+          <div style={{ width:38, height:38, borderRadius:11, background:'var(--primary-dim)', border:'1px solid var(--primary-border)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+            <window.IcoBot />
+          </div>
+          <div>
+            <p style={{ fontSize:14, fontWeight:700, color:'var(--text)' }}>AIコーチに相談する</p>
+            <p style={{ fontSize:11, color:'var(--text-muted)' }}>LINEで直接アドバイスを受ける</p>
+          </div>
+        </div>
+        <div style={{ display:'flex', flexDirection:'column', gap:6, marginBottom:16 }}>
+          {['今日のトレーニングメニューを提案して','ベンチプレスのフォームを教えて','停滞を打開する方法が知りたい'].map(ex => (
+            <div key={ex} style={{ background:'var(--surface2)', borderRadius:9, padding:'8px 12px', fontSize:12, color:'var(--text-muted)', border:'1px solid var(--border)' }}>"{ex}"</div>
+          ))}
+        </div>
+        <button style={{ width:'100%', padding:'13px 16px', border:'none', borderRadius:12, background:'var(--primary)', color:'#fff', fontSize:14, fontWeight:700, cursor:'pointer', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+          <span>LINEでAIコーチに話しかける</span>
+          <span style={{ fontSize:12, fontWeight:400, opacity:0.85 }}>残り{rem}回</span>
+        </button>
+      </div>
+
+      {/* Upgrade nudge */}
+      {rem <= 2 && rem > 0 && (
+        <div style={{ background:'var(--gold-dim)', border:'1px solid var(--gold-border)', borderRadius:12, padding:'12px 14px', display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, marginBottom:12 }}>
+          <p style={{ fontSize:13, color:'var(--gold)', fontWeight:600 }}>残り{rem}回。プレミアムで無制限に！</p>
+          <button onClick={() => go('subscribe')} style={{ padding:'7px 13px', background:'var(--primary)', color:'#fff', border:'none', borderRadius:8, fontSize:12, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' }}>アップグレード</button>
+        </div>
+      )}
+
+      {/* Period tabs */}
+      <div style={{ display:'flex', gap:6, marginBottom:14 }}>
+        {[['1w','1週間'],['1m','1ヶ月'],['3m','3ヶ月']].map(([v,l]) => (
+          <button key={v} onClick={() => setPeriod(v)} style={{ padding:'7px 14px', borderRadius:999, border:`1px solid ${period===v?'var(--primary)':'var(--border)'}`, background:period===v?'var(--primary-dim)':'transparent', color:period===v?'var(--primary)':'var(--text-muted)', fontSize:13, fontWeight:period===v?700:400, cursor:'pointer' }}>{l}</button>
+        ))}
+      </div>
+
+      {/* Radar chart */}
+      {card(<>{secLabel('部位別バランス')}<div style={{ height:240 }}><canvas ref={radarRef} /></div></>)}
+
+      {/* Line chart */}
+      {card(<>{secLabel('重量推移')}<div style={{ height:220 }}><canvas ref={lineRef} /></div></>)}
+
+      {/* Recent workouts */}
+      {card(
+        <>
+          {secLabel('直近のトレーニング')}
+          {MOCK.recent.map((w, i) => (
+            <div key={i} style={{ paddingBottom: i<MOCK.recent.length-1?12:0, marginBottom:i<MOCK.recent.length-1?12:0, borderBottom:i<MOCK.recent.length-1?'1px solid var(--border)':'none' }}>
+              <p style={{ fontSize:11, color:'var(--text-muted)', marginBottom:5 }}>{w.date}</p>
+              <p style={{ fontSize:13, color:'var(--text)', lineHeight:1.65 }}>
+                {w.exs.map(e => `${e.n} ${e.w}kg × ${e.r}回 × ${e.s}セット`).join('、')}
+              </p>
+            </div>
+          ))}
+        </>
+      , 0)}
+    </div>
+  )
+}
+
+/* ── WorkoutInput ── */
+const QUICK_EX = ['ベンチプレス','スクワット','デッドリフト','ショルダープレス','ラットプルダウン','ダンベルカール','トライセップス','レッグプレス','インクラインベンチ']
+
+function WorkoutInputPage() {
+  const todayStr = () => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` }
+  const [date, setDate] = uS(todayStr())
+  const [exs, setExs] = uS([{ name:'', weight:'', reps:'', sets:'' }])
+  const [saving, setSaving] = uS(false)
+  const [saved, setSaved] = uS(false)
+
+  const upd = (i, f, v) => setExs(p => p.map((e,j) => j===i?{...e,[f]:v}:e))
+  const del = i => setExs(p => p.filter((_,j) => j!==i))
+  const add = () => setExs(p => [...p,{ name:'', weight:'', reps:'', sets:'' }])
+  const canSave = exs.some(e => e.name.trim())
+
+  const save = () => {
+    if (!canSave||saving) return
+    setSaving(true); setSaved(false)
+    setTimeout(() => { setSaving(false); setSaved(true); setExs([{ name:'', weight:'', reps:'', sets:'' }]); setDate(todayStr()) }, 900)
+  }
+
+  const inp = (extra={}) => ({
+    width:'100%', padding:'9px 12px', border:'1px solid var(--border)', borderRadius:9,
+    fontSize:13, background:'var(--surface2)', color:'var(--text)', outline:'none', boxSizing:'border-box',
+    ...extra
+  })
+
+  return (
+    <div className="fade-up">
+      <h2 style={{ fontSize:22, fontWeight:800, letterSpacing:'-0.02em', marginBottom:18 }}>ワークアウト記録</h2>
+
+      <div style={{ marginBottom:18 }}>
+        <label style={{ fontSize:11, fontWeight:700, color:'var(--text-muted)', letterSpacing:'0.06em', display:'block', marginBottom:7 }}>日付</label>
+        <input type="date" value={date} onChange={e => setDate(e.target.value)} style={{ ...inp(), colorScheme:'dark' }} />
+      </div>
+
+      {exs.map((ex, i) => (
+        <div key={i} style={{ background:'var(--surface)', borderRadius:18, padding:'14px 16px', marginBottom:10, border:'1px solid var(--border)' }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
+            <span style={{ fontSize:11, fontWeight:700, color:'var(--text-muted)', letterSpacing:'0.06em' }}>種目 {i+1}</span>
+            {exs.length>1 && <button onClick={() => del(i)} style={{ background:'none', border:'none', color:'var(--danger)', fontSize:12, cursor:'pointer' }}>削除</button>}
+          </div>
+
+          <div style={{ display:'flex', flexWrap:'wrap', gap:5, marginBottom:10 }}>
+            {QUICK_EX.map(n => (
+              <button key={n} onClick={() => upd(i,'name',n)} style={{ padding:'5px 10px', borderRadius:999, fontSize:11, cursor:'pointer', border:`1px solid ${ex.name===n?'var(--primary)':'var(--border)'}`, background:ex.name===n?'var(--primary-dim)':'transparent', color:ex.name===n?'var(--primary)':'var(--text-muted)', fontWeight:ex.name===n?700:400 }}>{n}</button>
+            ))}
+          </div>
+
+          <input placeholder="種目名を入力" value={ex.name} onChange={e => upd(i,'name',e.target.value)} style={{ ...inp(), marginBottom:9 }} />
+
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8 }}>
+            {[['weight','重量 (kg)'],['reps','回数'],['sets','セット数']].map(([f,l]) => (
+              <div key={f}>
+                <label style={{ fontSize:10, fontWeight:700, color:'var(--text-muted)', display:'block', marginBottom:4, letterSpacing:'0.04em' }}>{l}</label>
+                <input type="number" placeholder="0" value={ex[f]} onChange={e => upd(i,f,e.target.value)} style={{ ...inp(), textAlign:'center' }} />
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+
+      <button onClick={add} style={{ width:'100%', padding:12, border:'1.5px dashed var(--border-md)', borderRadius:14, background:'none', color:'var(--text-muted)', fontSize:13, fontWeight:600, cursor:'pointer', marginBottom:16 }}>＋ 種目を追加</button>
+
+      {saved && (
+        <div style={{ marginBottom:12 }}>
+          <div style={{ background:'var(--primary-dim)', border:'1px solid var(--primary-border)', borderRadius:12, padding:'12px 16px', textAlign:'center', color:'var(--primary)', fontWeight:700, fontSize:14, marginBottom:8 }}>記録しました！</div>
+          <button style={{ width:'100%', padding:12, border:'1.5px solid var(--primary)', borderRadius:12, background:'none', color:'var(--primary)', fontSize:13, fontWeight:700, cursor:'pointer' }}>
+            AIコーチに今日の記録を分析してもらう →
+          </button>
+        </div>
+      )}
+
+      <button onClick={save} disabled={!canSave||saving} style={{ width:'100%', padding:14, border:'none', borderRadius:14, background:canSave?'var(--primary)':'var(--text-faint)', color:canSave?'#fff':'var(--text-muted)', fontSize:15, fontWeight:700, cursor:canSave?'pointer':'not-allowed', transition:'background 0.2s' }}>
+        {saving ? '保存中...' : '保存する'}
+      </button>
+    </div>
+  )
+}
+
+Object.assign(window, { OnboardingPage, DashboardPage, WorkoutInputPage })
+</script>
+
+<!-- ── Script 3: Pages B + App root ─────────────────────── -->
+<script type="text/babel">
+const { useState: uS3, useEffect: uE3 } = React
+
+/* ── WorkoutLog ── */
+const WORKOUT_DATES = new Set(['2026-04-24','2026-04-22','2026-04-20','2026-04-18','2026-04-15','2026-04-12','2026-04-10','2026-04-08'])
+const WD = ['日','月','火','水','木','金','土']
+
+function WorkoutLogPage() {
+  const [cur, setCur] = uS3(new Date(2026,3,1))
+  const [sel, setSel] = uS3(null)
+  const y=cur.getFullYear(), m=cur.getMonth()
+  const first=new Date(y,m,1).getDay(), days=new Date(y,m+1,0).getDate()
+  const cells = [...Array(first).fill(null), ...Array.from({length:days},(_,i)=>`${y}-${String(m+1).padStart(2,'0')}-${String(i+1).padStart(2,'0')}`)]
+  const hasW = d => d && WORKOUT_DATES.has(d)
+  const detail = sel && hasW(sel) ? [
+    { name:'ベンチプレス', part:'胸', sets:[{w:70,r:8},{w:70,r:8},{w:67.5,r:10},{w:65,r:12}] },
+    { name:'インクラインベンチ', part:'胸', sets:[{w:55,r:10},{w:55,r:10},{w:52.5,r:12}] },
+  ] : null
+
+  return (
+    <div className="fade-up">
+      <h2 style={{ fontSize:22, fontWeight:800, letterSpacing:'-0.02em', marginBottom:16 }}>トレーニング記録</h2>
+
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
+        <button onClick={() => setCur(new Date(y,m-1,1))} style={{ width:36, height:36, borderRadius:10, border:'1px solid var(--border)', background:'var(--surface)', color:'var(--text)', cursor:'pointer', fontSize:16 }}>‹</button>
+        <span style={{ fontSize:15, fontWeight:700 }}>{y}年{m+1}月</span>
+        <button onClick={() => setCur(new Date(y,m+1,1))} style={{ width:36, height:36, borderRadius:10, border:'1px solid var(--border)', background:'var(--surface)', color:'var(--text)', cursor:'pointer', fontSize:16 }}>›</button>
+      </div>
+
+      <div style={{ background:'var(--surface)', borderRadius:18, padding:'12px 10px 14px', border:'1px solid var(--border)', marginBottom:14 }}>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', marginBottom:4 }}>
+          {WD.map(w => <div key={w} style={{ textAlign:'center', fontSize:11, fontWeight:600, color:'var(--text-muted)', padding:'4px 0' }}>{w}</div>)}
+        </div>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:2 }}>
+          {cells.map((d,i) => {
+            if (!d) return <div key={i} />
+            const hw=hasW(d), isSel=sel===d, day=parseInt(d.split('-')[2])
+            return (
+              <button key={i} onClick={() => setSel(d)} style={{ aspectRatio:'1', borderRadius:9, border:'none', cursor:'pointer', fontSize:13, fontWeight:hw?700:400, background:isSel?'var(--primary)':hw?'var(--primary-dim)':'transparent', color:isSel?'#fff':hw?'var(--primary)':'var(--text-muted)', position:'relative' }}>
+                {day}
+                {hw&&!isSel && <span style={{ position:'absolute', bottom:3, left:'50%', transform:'translateX(-50%)', width:4, height:4, borderRadius:'50%', background:'var(--primary)' }} />}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {sel && (detail ? (
+        <div>
+          <p style={{ fontSize:12, color:'var(--text-muted)', marginBottom:10 }}>{sel.replace(/-/g,'/')}</p>
+          {detail.map((ex, i) => (
+            <div key={i} style={{ background:'var(--surface)', borderRadius:14, padding:'14px 16px', marginBottom:8, border:'1px solid var(--border)' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10 }}>
+                <span style={{ fontSize:14, fontWeight:700 }}>{ex.name}</span>
+                <span style={{ fontSize:11, fontWeight:700, color:'var(--primary)', background:'var(--primary-dim)', padding:'2px 8px', borderRadius:99 }}>{ex.part}</span>
+              </div>
+              <table style={{ width:'100%', borderCollapse:'collapse' }}>
+                <thead><tr>{['セット','重量','回数'].map(h => <th key={h} style={{ fontSize:11, color:'var(--text-muted)', fontWeight:500, padding:'4px 0', textAlign:'center', borderBottom:'1px solid var(--border)' }}>{h}</th>)}</tr></thead>
+                <tbody>{ex.sets.map((s,j) => <tr key={j}><td style={{ textAlign:'center', fontSize:13, color:'var(--text-muted)', padding:'7px 0' }}>{j+1}</td><td style={{ textAlign:'center', fontSize:13, color:'var(--text)', fontWeight:600 }}>{s.w}kg</td><td style={{ textAlign:'center', fontSize:13, color:'var(--text)', fontWeight:600 }}>{s.r}回</td></tr>)}</tbody>
+              </table>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div style={{ textAlign:'center', padding:'32px 0', color:'var(--text-muted)', fontSize:13 }}>この日のトレーニング記録はありません</div>
+      ))}
+    </div>
+  )
+}
+
+/* ── Subscribe ── */
+const FEATURES = ['AIパーソナルトレーナーの無制限利用（フリーは月5回）','週次AIレポート自動送信（月曜朝に届く）','日次リマインダー・週次レポート通知','目標別パーソナルトレーニングプログラム作成']
+
+function SubscribePage() {
+  const [proc, setProc] = uS3(false)
+  return (
+    <div className="fade-up">
+      <div style={{ textAlign:'center', padding:'20px 0 24px' }}>
+        <window.PlanBadge plan="free" />
+        <h2 style={{ fontSize:22, fontWeight:800, marginTop:12, marginBottom:6, letterSpacing:'-0.02em' }}>無料プラン</h2>
+        <p style={{ fontSize:13, color:'var(--text-muted)' }}>アップグレードでさらに便利に</p>
+      </div>
+
+      <div style={{ background:'var(--surface)', borderRadius:20, overflow:'hidden', border:'1px solid var(--border)', marginBottom:14 }}>
+        <div style={{ background:'linear-gradient(160deg,#0c2b1a 0%,#0f3520 100%)', borderBottom:'1px solid var(--primary-border)', padding:'24px 20px', textAlign:'center' }}>
+          <span style={{ display:'inline-flex', alignItems:'center', gap:5, background:'var(--gold-dim)', border:'1px solid var(--gold-border)', borderRadius:999, padding:'4px 13px', marginBottom:16 }}>
+            <span style={{ color:'var(--gold)', fontSize:12, fontWeight:700 }}>★ プレミアムプラン</span>
+          </span>
+          <div style={{ fontSize:44, fontWeight:800, color:'var(--text)', letterSpacing:'-0.03em', lineHeight:1 }}>
+            ¥1,480<span style={{ fontSize:16, fontWeight:500, color:'var(--text-muted)' }}>/月</span>
+          </div>
+          <p style={{ fontSize:12, color:'var(--primary)', marginTop:10, fontWeight:600 }}>最初の1週間は無料</p>
+        </div>
+        <div style={{ padding:'14px 20px 20px' }}>
+          {FEATURES.map((f,i) => (
+            <div key={i} style={{ display:'flex', alignItems:'flex-start', gap:10, padding:'10px 0', borderBottom:i<FEATURES.length-1?'1px solid var(--border)':'none' }}>
+              <span style={{ width:20, height:20, borderRadius:'50%', background:'var(--primary-dim)', border:'1px solid var(--primary-border)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, marginTop:1 }}>
+                <window.IcoCheck />
+              </span>
+              <span style={{ fontSize:13, color:'var(--text)', lineHeight:1.55 }}>{f}</span>
+            </div>
+          ))}
+        </div>
+        <div style={{ padding:'0 20px 20px' }}>
+          <button onClick={() => setProc(true)} disabled={proc} style={{ width:'100%', padding:14, border:'none', borderRadius:14, background:'var(--primary)', color:'#fff', fontSize:15, fontWeight:700, cursor:'pointer', opacity:proc?0.7:1 }}>
+            {proc ? '処理中...' : '1週間無料で試す'}
+          </button>
+        </div>
+      </div>
+      <div style={{ background:'var(--surface)', borderRadius:14, padding:'13px 16px', border:'1px solid var(--border)' }}>
+        <p style={{ fontSize:12, color:'var(--text-muted)', lineHeight:1.7 }}>無料トライアル終了後、自動的に月額¥1,480が請求されます。いつでもキャンセル可能です。</p>
+      </div>
+    </div>
+  )
+}
+
+/* ── Profile ── */
+const GOALS = [{v:'hypertrophy',l:'筋肥大'},{v:'diet',l:'ダイエット'},{v:'strength',l:'筋力アップ'},{v:'health',l:'健康維持'}]
+const LEVELS = [{v:'beginner',l:'初心者'},{v:'intermediate',l:'中級者'},{v:'advanced',l:'上級者'}]
+const EQUIP  = [{v:'bodyweight',l:'自重のみ'},{v:'dumbbell',l:'ダンベル'},{v:'barbell',l:'バーベル'},{v:'gym',l:'ジム器具'}]
+
+function ProfilePage() {
+  const [goal, setGoal]   = uS3('hypertrophy')
+  const [level, setLevel] = uS3('intermediate')
+  const [equip, setEquip] = uS3(['gym','barbell'])
+  const [freq, setFreq]   = uS3(4)
+  const [name, setName]   = uS3('')
+  const [notif, setNotif] = uS3(false)
+  const [time, setTime]   = uS3('09:00')
+  const [saving, setSaving] = uS3(false)
+  const [saved, setSaved]   = uS3(false)
+
+  const toggleEquip = v => setEquip(p => p.includes(v)?p.filter(e=>e!==v):[...p,v])
+  const save = () => {
+    setSaving(true); setSaved(false)
+    setTimeout(() => { setSaving(false); setSaved(true); setTimeout(()=>setSaved(false),2500) }, 900)
+  }
+
+  const Btn = ({ sel, onClick, label }) => (
+    <button onClick={onClick} style={{ padding:'10px 8px', border:`1.5px solid ${sel?'var(--primary)':'var(--border)'}`, borderRadius:10, background:sel?'var(--primary-dim)':'transparent', color:sel?'var(--primary)':'var(--text-muted)', fontSize:13, fontWeight:sel?700:400, cursor:'pointer', textAlign:'center', transition:'all 0.15s' }}>{label}</button>
+  )
+  const SLabel = ({ t }) => <label style={{ display:'block', fontSize:11, fontWeight:700, color:'var(--text-muted)', letterSpacing:'0.06em', marginBottom:10 }}>{t}</label>
+  const inpSt = { width:'100%', padding:'10px 12px', border:'1px solid var(--border)', borderRadius:10, fontSize:13, background:'var(--surface2)', color:'var(--text)', outline:'none', boxSizing:'border-box' }
+
+  return (
+    <div className="fade-up">
+      <h2 style={{ fontSize:22, fontWeight:800, letterSpacing:'-0.02em', marginBottom:18 }}>プロフィール設定</h2>
+
+      {saved && <div style={{ background:'var(--primary-dim)', border:'1px solid var(--primary-border)', borderRadius:12, padding:'12px 14px', color:'var(--primary)', fontWeight:700, fontSize:13, textAlign:'center', marginBottom:14 }}>保存しました！</div>}
+
+      <div style={{ background:'var(--surface)', borderRadius:18, padding:18, border:'1px solid var(--border)', marginBottom:12 }}>
+        <SLabel t="トレーナーの名前" />
+        <input type="text" value={name} onChange={e=>setName(e.target.value.slice(0,20))} placeholder="例：コウ、田中トレーナー など" style={{ ...inpSt, marginBottom:6 }} />
+        <p style={{ fontSize:11, color:'var(--text-muted)', lineHeight:1.55, marginBottom:18 }}>LINEのメッセージに表示される名前です（空欄の場合はデフォルト名）</p>
+
+        <SLabel t="トレーニングの目標" />
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:18 }}>
+          {GOALS.map(g => <Btn key={g.v} sel={goal===g.v} onClick={()=>setGoal(g.v)} label={g.l} />)}
+        </div>
+
+        <SLabel t="トレーニングレベル" />
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:18 }}>
+          {LEVELS.map(l => <Btn key={l.v} sel={level===l.v} onClick={()=>setLevel(l.v)} label={l.l} />)}
+        </div>
+
+        <SLabel t="利用可能な器具" />
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:18 }}>
+          {EQUIP.map(e => <Btn key={e.v} sel={equip.includes(e.v)} onClick={()=>toggleEquip(e.v)} label={e.l} />)}
+        </div>
+
+        <SLabel t="週のトレーニング頻度" />
+        <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+          {[2,3,4,5,6,7].map(n => (
+            <button key={n} onClick={()=>setFreq(n)} style={{ width:38, height:38, borderRadius:'50%', border:`1.5px solid ${freq===n?'var(--primary)':'var(--border)'}`, background:freq===n?'var(--primary)':'transparent', color:freq===n?'#fff':'var(--text-muted)', fontWeight:700, fontSize:13, cursor:'pointer' }}>{n}</button>
+          ))}
+          <span style={{ fontSize:12, color:'var(--text-muted)' }}>回/週</span>
+        </div>
+      </div>
+
+      <div style={{ background:'var(--surface)', borderRadius:18, padding:18, border:'1px solid var(--border)', marginBottom:14 }}>
+        <SLabel t="通知設定" />
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:notif?14:0 }}>
+          <span style={{ fontSize:13, color:'var(--text)', lineHeight:1.5 }}>日次リマインダー・週次レポート</span>
+          <button onClick={()=>setNotif(v=>!v)} style={{ width:46, height:26, borderRadius:13, border:'none', cursor:'pointer', background:notif?'var(--primary)':'var(--surface2)', position:'relative', transition:'background 0.2s', flexShrink:0 }}>
+            <span style={{ position:'absolute', top:3, left:notif?23:3, width:20, height:20, borderRadius:'50%', background:'#fff', transition:'left 0.2s' }} />
+          </button>
+        </div>
+        {notif && (
+          <div>
+            <label style={{ fontSize:11, fontWeight:700, color:'var(--text-muted)', display:'block', marginBottom:6, letterSpacing:'0.05em' }}>通知時刻</label>
+            <input type="time" value={time} onChange={e=>setTime(e.target.value)} style={{ ...inpSt, colorScheme:'dark' }} />
+          </div>
+        )}
+      </div>
+
+      <button onClick={save} disabled={saving} style={{ width:'100%', padding:14, border:'none', borderRadius:14, background:'var(--primary)', color:'#fff', fontSize:15, fontWeight:700, cursor:'pointer', opacity:saving?0.7:1 }}>
+        {saving ? '保存中...' : '設定を保存'}
+      </button>
+    </div>
+  )
+}
+
+/* ── App ── */
+function App() {
+  const [page, setPage] = uS3('onboarding')
+  const pageMap = {
+    onboarding: <window.OnboardingPage go={setPage} />,
+    dashboard:  <window.DashboardPage go={setPage} />,
+    'workout-input': <window.WorkoutInputPage />,
+    'workout-log': <WorkoutLogPage />,
+    subscribe: <SubscribePage />,
+    profile: <ProfilePage />,
+  }
+  return (
+    <div className="phone">
+      {page !== 'onboarding' && <window.Header />}
+      <div className="page-wrap" key={page}>
+        {pageMap[page] || pageMap['dashboard']}
+      </div>
+      <window.BottomNav page={page} go={setPage} />
+    </div>
+  )
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />)
+</script>
+</body>
+</html>
