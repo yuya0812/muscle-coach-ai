@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 import { theme } from '../theme'
 import { updateProfile, updateNotificationSettings, getProfile } from '../api'
+import { openExternalUrl } from '../liff'
 import Loading from '../components/Loading'
 import { useTour } from '../tour/TourContext'
 
@@ -179,6 +180,36 @@ const CancelButton = styled.button`
   cursor: pointer;
   margin-top: 10px;
   &:active { color: ${theme.colors.text}; }
+`
+
+const LegalCard = styled.div`
+  background: ${theme.colors.surface};
+  border: 1px solid ${theme.colors.border};
+  border-radius: 18px;
+  padding: 6px 4px;
+  margin-bottom: ${theme.spacing.md};
+`
+
+const LegalLink = styled.button`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 14px 14px;
+  border: none;
+  background: none;
+  color: ${theme.colors.text};
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  & + & { border-top: 1px solid ${theme.colors.border}; }
+  &:active { background: ${theme.colors.surface2}; }
+`
+
+const LegalLinkArrow = styled.span`
+  color: ${theme.colors.textMuted};
+  font-size: 14px;
 `
 
 const TourLinkButton = styled.button`
@@ -812,6 +843,22 @@ export default function Profile({ userId }: { userId: string }) {
       {profileSection}
       {aboutSection}
       {notifSection}
+
+      <SectionLabel style={{ marginBottom: 8 }}>規約・ポリシー</SectionLabel>
+      <LegalCard>
+        <LegalLink onClick={() => openExternalUrl('https://muscle-coach-ai.web.app/terms.html')}>
+          利用規約
+          <LegalLinkArrow>›</LegalLinkArrow>
+        </LegalLink>
+        <LegalLink onClick={() => openExternalUrl('https://muscle-coach-ai.web.app/privacy.html')}>
+          プライバシーポリシー
+          <LegalLinkArrow>›</LegalLinkArrow>
+        </LegalLink>
+        <LegalLink onClick={() => openExternalUrl('https://muscle-coach-ai.web.app/commerce.html')}>
+          特定商取引法に基づく表記
+          <LegalLinkArrow>›</LegalLinkArrow>
+        </LegalLink>
+      </LegalCard>
 
       {isAnyEdit ? (
         <>

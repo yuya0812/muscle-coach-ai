@@ -43,6 +43,18 @@ export function closeLiff(): void {
 }
 
 /**
+ * 外部ブラウザでURLを開く。LIFF内なら liff.openWindow を使ってLINE外に飛ばす。
+ * 利用規約・プライバシーポリシー等の静的ページや Stripe Checkout を開く時に使用。
+ */
+export function openExternalUrl(url: string): void {
+  if (liff.isInClient()) {
+    liff.openWindow({ url, external: true })
+  } else {
+    window.open(url, '_blank', 'noopener')
+  }
+}
+
+/**
  * LINEトークにテキストを送信したあとLIFFを閉じる。
  * `chat_message.write` スコープが必要（LINE Developers Console で有効化）。
  * スコープ未付与・送信失敗時はエラーを飲み込み、closeWindowだけ実行する。

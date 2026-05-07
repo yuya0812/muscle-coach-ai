@@ -7,7 +7,7 @@ import {
   getSubscriptionStatus,
   type SubscriptionStatus,
 } from '../api'
-import { liff } from '../liff'
+import { openExternalUrl } from '../liff'
 import PlanBadge from '../components/PlanBadge'
 import Loading from '../components/Loading'
 
@@ -157,6 +157,72 @@ const FootNote = styled.p`
   margin-top: ${theme.spacing.sm};
 `
 
+const AgreementRow = styled.label`
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  background: ${theme.colors.surface2};
+  border: 1px solid ${theme.colors.border};
+  border-radius: 12px;
+  margin-bottom: 12px;
+  cursor: pointer;
+  font-size: 12.5px;
+  color: ${theme.colors.text};
+  line-height: 1.55;
+  &:active { background: ${theme.colors.surface}; }
+`
+
+const AgreementCheckbox = styled.input`
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  accent-color: ${theme.colors.primary};
+  cursor: pointer;
+`
+
+const AgreementLink = styled.button`
+  background: none;
+  border: none;
+  color: ${theme.colors.primary};
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: inherit;
+  padding: 0;
+  font-family: inherit;
+`
+
+const LegalCard = styled.div`
+  background: ${theme.colors.surface};
+  border: 1px solid ${theme.colors.border};
+  border-radius: 14px;
+  padding: 4px;
+  margin-top: ${theme.spacing.lg};
+`
+
+const LegalLink = styled.button`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 12px 14px;
+  border: none;
+  background: none;
+  color: ${theme.colors.text};
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  & + & { border-top: 1px solid ${theme.colors.border}; }
+  &:active { background: ${theme.colors.surface2}; }
+`
+
+const LegalLinkArrow = styled.span`
+  color: ${theme.colors.textMuted};
+  font-size: 14px;
+`
+
 const PREMIUM_FEATURES = [
   'AIパーソナルトレーナーの無制限利用（フリーは月5回）',
   '週次AIレポート自動送信（月曜朝に届く）',
@@ -164,18 +230,11 @@ const PREMIUM_FEATURES = [
   '目標別パーソナルトレーニングプログラム作成',
 ]
 
-function openExternalUrl(url: string) {
-  if (liff.isInClient()) {
-    liff.openWindow({ url, external: true })
-  } else {
-    window.location.href = url
-  }
-}
-
 export default function Subscribe({ userId }: { userId: string }) {
   const [status, setStatus] = useState<SubscriptionStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState(false)
+  const [agreed, setAgreed] = useState(false)
 
   const urlParams = new URLSearchParams(window.location.search)
   const checkoutResult = urlParams.get('success') ? 'success' : urlParams.get('canceled') ? 'cancel' : null
@@ -266,7 +325,24 @@ export default function Subscribe({ userId }: { userId: string }) {
             ))}
           </FeatureList>
           <ButtonWrap data-tour-id="subscribe-cta">
-            <Button onClick={handleSubscribe} disabled={processing}>
+            <AgreementRow>
+              <AgreementCheckbox
+                type="checkbox"
+                checked={agreed}
+                onChange={(e) => setAgreed(e.target.checked)}
+              />
+              <span>
+                <AgreementLink onClick={(e) => { e.preventDefault(); openExternalUrl('https://muscle-coach-ai.web.app/terms.html') }}>
+                  利用規約
+                </AgreementLink>
+                {' '}と{' '}
+                <AgreementLink onClick={(e) => { e.preventDefault(); openExternalUrl('https://muscle-coach-ai.web.app/privacy.html') }}>
+                  プライバシーポリシー
+                </AgreementLink>
+                {' '}に同意してプランを開始する
+              </span>
+            </AgreementRow>
+            <Button onClick={handleSubscribe} disabled={processing || !agreed}>
               {processing ? '処理中...' : '1週間無料で試す'}
             </Button>
           </ButtonWrap>
@@ -285,6 +361,18 @@ export default function Subscribe({ userId }: { userId: string }) {
           )}
         </div>
       )}
+
+      <LegalCard>
+        <LegalLink onClick={() => openExternalUrl('https://muscle-coach-ai.web.app/terms.html')}>
+          利用規約 <LegalLinkArrow>›</LegalLinkArrow>
+        </LegalLink>
+        <LegalLink onClick={() => openExternalUrl('https://muscle-coach-ai.web.app/privacy.html')}>
+          プライバシーポリシー <LegalLinkArrow>›</LegalLinkArrow>
+        </LegalLink>
+        <LegalLink onClick={() => openExternalUrl('https://muscle-coach-ai.web.app/commerce.html')}>
+          特定商取引法に基づく表記 <LegalLinkArrow>›</LegalLinkArrow>
+        </LegalLink>
+      </LegalCard>
     </Page>
   )
 }
