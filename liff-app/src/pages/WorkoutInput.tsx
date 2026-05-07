@@ -1,27 +1,29 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import styled from 'styled-components'
 import { theme } from '../theme'
-import { saveWorkout } from '../api'
-import { closeLiff } from '../liff'
+import { saveWorkout, getRecentCustomExercises, getProfile, type SaveExerciseInput } from '../api'
+import { closeLiff, sendMessageAndCloseLiff } from '../liff'
 
-const COMMON_EXERCISES = [
-  'ベンチプレス', 'スクワット', 'デッドリフト',
-  'ショルダープレス', 'ラットプルダウン', 'ダンベルカール',
-  'トライセップス', 'レッグプレス', 'インクラインベンチ',
-]
+// BIG3 のみデフォルト。それ以外はユーザーが手入力した履歴から動的に追加。
+const BIG3_EXERCISES = ['ベンチプレス', 'スクワット', 'デッドリフト']
 
-interface Exercise {
-  name: string
+interface SetGroupRow {
   weight: string
   reps: string
   sets: string
 }
 
-const emptyExercise = (): Exercise => ({ name: '', weight: '', reps: '', sets: '' })
+interface ExerciseRow {
+  name: string
+  setGroups: SetGroupRow[]
+}
+
+const emptySetGroup = (): SetGroupRow => ({ weight: '', reps: '', sets: '' })
+const emptyExercise = (): ExerciseRow => ({ name: '', setGroups: [emptySetGroup()] })
 
 const Page = styled.div`
   padding: ${theme.spacing.md};
-  padding-bottom: 80px;
+  padding-bottom: 100px;
   animation: fadeUp 0.22s ease both;
 `
 
@@ -106,6 +108,7 @@ const QuickTags = styled.div`
   flex-wrap: wrap;
   gap: 6px;
   margin-bottom: 10px;
+  align-items: center;
 `
 
 const QuickTag = styled.button<{ $selected: boolean }>`
@@ -118,6 +121,14 @@ const QuickTag = styled.button<{ $selected: boolean }>`
   font-weight: ${({ $selected }) => ($selected ? 700 : 500)};
   cursor: pointer;
   white-space: nowrap;
+`
+
+const HistoryDivider = styled.span`
+  font-size: 10px;
+  font-weight: 700;
+  color: ${theme.colors.textFaint};
+  letter-spacing: 0.06em;
+  padding: 0 4px;
 `
 
 const Input = styled.input`
@@ -137,11 +148,57 @@ const Input = styled.input`
   &::placeholder { color: ${theme.colors.textMuted}; }
 `
 
+const SetGroupBox = styled.div`
+  background: ${theme.colors.bg};
+  border: 1px solid ${theme.colors.border};
+  border-radius: 11px;
+  padding: 10px 12px;
+  margin-top: 10px;
+  position: relative;
+`
+
+const SetGroupHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+`
+
+const SetGroupNo = styled.span`
+  font-size: 10px;
+  font-weight: 800;
+  color: ${theme.colors.textMuted};
+  letter-spacing: 0.06em;
+`
+
+const SetGroupRemove = styled.button`
+  background: none;
+  border: none;
+  color: ${theme.colors.textMuted};
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 6px;
+  &:active { color: ${theme.colors.danger}; }
+`
+
 const FieldRow = styled.div`
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
-  gap: 10px;
-  margin-top: 12px;
+  gap: 8px;
+`
+
+const AddSetGroupButton = styled.button`
+  width: 100%;
+  padding: 8px;
+  border: 1px dashed ${theme.colors.borderMd};
+  border-radius: 10px;
+  background: none;
+  color: ${theme.colors.textMuted};
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 8px;
+  &:active { color: ${theme.colors.text}; }
 `
 
 const AddButton = styled.button`
@@ -207,16 +264,63 @@ function todayString(): string {
 
 export default function WorkoutInput({ userId }: { userId: string }) {
   const [date, setDate] = useState(todayString())
-  const [exercises, setExercises] = useState<Exercise[]>([emptyExercise()])
+  const [exercises, setExercises] = useState<ExerciseRow[]>([emptyExercise()])
   const [saving, setSaving] = useState(false)
   const [success, setSuccess] = useState(false)
+  const [historyTags, setHistoryTags] = useState<string[]>([])
+  const [autoSendEnabled, setAutoSendEnabled] = useState(false)
+  const [autoSendMessage, setAutoSendMessage] = useState('今日の記録を分析して')
 
-  const updateExercise = (index: number, field: keyof Exercise, value: string) => {
-    setExercises((prev) => prev.map((ex, i) => (i === index ? { ...ex, [field]: value } : ex)))
+  // 直近の手入力種目を取得（BIG3を除外して履歴側に重複させない）
+  useEffect(() => {
+    getRecentCustomExercises(userId, BIG3_EXERCISES, 6)
+      .then((res) => setHistoryTags(res.names))
+      .catch(() => setHistoryTags([]))
+  }, [userId, success]) // 保存成功後にも再取得
+
+  // AI自動送信設定を取得
+  useEffect(() => {
+    getProfile(userId)
+      .then((p) => {
+        setAutoSendEnabled(p.settings.autoSendAnalysisEnabled ?? false)
+        setAutoSendMessage(p.settings.autoSendAnalysisMessage || '今日の記録を分析して')
+      })
+      .catch(() => { /* 失敗時はデフォルト動作 */ })
+  }, [userId])
+
+  const updateExerciseName = (i: number, name: string) => {
+    setExercises((prev) => prev.map((ex, idx) => (idx === i ? { ...ex, name } : ex)))
   }
 
-  const removeExercise = (index: number) => {
-    setExercises((prev) => prev.filter((_, i) => i !== index))
+  const updateSetGroup = (exIdx: number, gIdx: number, field: keyof SetGroupRow, value: string) => {
+    setExercises((prev) =>
+      prev.map((ex, i) =>
+        i !== exIdx
+          ? ex
+          : {
+              ...ex,
+              setGroups: ex.setGroups.map((g, j) => (j === gIdx ? { ...g, [field]: value } : g)),
+            }
+      )
+    )
+  }
+
+  const addSetGroup = (exIdx: number) => {
+    setExercises((prev) =>
+      prev.map((ex, i) => (i !== exIdx ? ex : { ...ex, setGroups: [...ex.setGroups, emptySetGroup()] }))
+    )
+  }
+
+  const removeSetGroup = (exIdx: number, gIdx: number) => {
+    setExercises((prev) =>
+      prev.map((ex, i) =>
+        i !== exIdx ? ex : { ...ex, setGroups: ex.setGroups.filter((_, j) => j !== gIdx) }
+      )
+    )
+  }
+
+  const removeExercise = (i: number) => {
+    setExercises((prev) => prev.filter((_, idx) => idx !== i))
   }
 
   const addExercise = () => {
@@ -230,14 +334,24 @@ export default function WorkoutInput({ userId }: { userId: string }) {
     setSaving(true)
     setSuccess(false)
     try {
-      const payload = exercises
+      const payload: SaveExerciseInput[] = exercises
         .filter((ex) => ex.name.trim() !== '')
         .map((ex) => ({
           name: ex.name.trim(),
-          weight: ex.weight ? Number(ex.weight) : undefined,
-          reps: ex.reps ? Number(ex.reps) : undefined,
-          sets: ex.sets ? Number(ex.sets) : undefined,
+          setGroups: ex.setGroups
+            .map((g) => ({
+              weight: g.weight ? Number(g.weight) : null,
+              reps: g.reps ? Number(g.reps) : null,
+              sets: g.sets ? Number(g.sets) : null,
+            }))
+            .filter((g) => g.weight !== null || g.reps !== null || g.sets !== null),
         }))
+        .filter((ex) => ex.setGroups.length > 0)
+      if (payload.length === 0) {
+        alert('少なくとも1セットの数値を入力してください。')
+        setSaving(false)
+        return
+      }
       await saveWorkout(userId, payload, date)
       setSuccess(true)
       setExercises([emptyExercise()])
@@ -246,6 +360,14 @@ export default function WorkoutInput({ userId }: { userId: string }) {
       alert('保存に失敗しました。再度お試しください。')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleAnalysisCta = async () => {
+    if (autoSendEnabled) {
+      await sendMessageAndCloseLiff(autoSendMessage || '今日の記録を分析して')
+    } else {
+      closeLiff()
     }
   }
 
@@ -266,11 +388,21 @@ export default function WorkoutInput({ userId }: { userId: string }) {
           </CardHeader>
 
           <QuickTags data-tour-id={i === 0 ? 'input-tags' : undefined}>
-            {COMMON_EXERCISES.map((name) => (
+            {BIG3_EXERCISES.map((name) => (
               <QuickTag
                 key={name}
                 $selected={ex.name === name}
-                onClick={() => updateExercise(i, 'name', name)}
+                onClick={() => updateExerciseName(i, name)}
+              >
+                {name}
+              </QuickTag>
+            ))}
+            {historyTags.length > 0 && <HistoryDivider>履歴</HistoryDivider>}
+            {historyTags.map((name) => (
+              <QuickTag
+                key={`hist-${name}`}
+                $selected={ex.name === name}
+                onClick={() => updateExerciseName(i, name)}
               >
                 {name}
               </QuickTag>
@@ -280,38 +412,52 @@ export default function WorkoutInput({ userId }: { userId: string }) {
           <Input
             placeholder="種目名を入力"
             value={ex.name}
-            onChange={(e) => updateExercise(i, 'name', e.target.value)}
+            onChange={(e) => updateExerciseName(i, e.target.value)}
           />
 
-          <FieldRow data-tour-id={i === 0 ? 'input-fields' : undefined}>
-            <div>
-              <FieldLabel>重量(kg)</FieldLabel>
-              <Input
-                type="number"
-                placeholder="0"
-                value={ex.weight}
-                onChange={(e) => updateExercise(i, 'weight', e.target.value)}
-              />
-            </div>
-            <div>
-              <FieldLabel>回数</FieldLabel>
-              <Input
-                type="number"
-                placeholder="0"
-                value={ex.reps}
-                onChange={(e) => updateExercise(i, 'reps', e.target.value)}
-              />
-            </div>
-            <div>
-              <FieldLabel>セット数</FieldLabel>
-              <Input
-                type="number"
-                placeholder="0"
-                value={ex.sets}
-                onChange={(e) => updateExercise(i, 'sets', e.target.value)}
-              />
-            </div>
-          </FieldRow>
+          {ex.setGroups.map((g, gIdx) => (
+            <SetGroupBox key={gIdx} data-tour-id={i === 0 && gIdx === 0 ? 'input-fields' : undefined}>
+              <SetGroupHeader>
+                <SetGroupNo>SET {gIdx + 1}</SetGroupNo>
+                {ex.setGroups.length > 1 && (
+                  <SetGroupRemove onClick={() => removeSetGroup(i, gIdx)}>削除</SetGroupRemove>
+                )}
+              </SetGroupHeader>
+              <FieldRow>
+                <div>
+                  <FieldLabel>重量(kg)</FieldLabel>
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    placeholder="0"
+                    value={g.weight}
+                    onChange={(e) => updateSetGroup(i, gIdx, 'weight', e.target.value)}
+                  />
+                </div>
+                <div>
+                  <FieldLabel>回数</FieldLabel>
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    placeholder="0"
+                    value={g.reps}
+                    onChange={(e) => updateSetGroup(i, gIdx, 'reps', e.target.value)}
+                  />
+                </div>
+                <div>
+                  <FieldLabel>セット数</FieldLabel>
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    placeholder="0"
+                    value={g.sets}
+                    onChange={(e) => updateSetGroup(i, gIdx, 'sets', e.target.value)}
+                  />
+                </div>
+              </FieldRow>
+            </SetGroupBox>
+          ))}
+          <AddSetGroupButton onClick={() => addSetGroup(i)}>+ セットを追加</AddSetGroupButton>
         </Card>
       ))}
 
@@ -320,7 +466,7 @@ export default function WorkoutInput({ userId }: { userId: string }) {
       {success && (
         <>
           <SuccessBar>記録しました！</SuccessBar>
-          <AiAnalysisButton onClick={closeLiff}>
+          <AiAnalysisButton onClick={handleAnalysisCta}>
             AIコーチに今日の記録を分析してもらう →
           </AiAnalysisButton>
         </>
