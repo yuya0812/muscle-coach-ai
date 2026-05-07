@@ -17,8 +17,20 @@ export interface UserProfile {
   createdAt: FirebaseFirestore.Timestamp;
   trainerType?: string;
   trainerName?: string;
+  // 旧オンボーディングの遺物（読み込み互換のため残す。新ヒアリングでは使わない）
   heightRange?: string;
   weightRange?: string;
+  // セットアップヒアリング項目
+  birthYearRange?: string; // "20s" | "30s" | "40s" | "50s" | "60plus"
+  sex?: string; // "male" | "female" | "other"
+  heightCm?: number;
+  weightKg?: number;
+  targetMuscleGroups?: string[]; // ["chest", "back", ...] or ["all"]
+  activityLevel?: string; // "sedentary" | "light" | "moderate" | "active"
+  bodyFatPercent?: number; // null/未設定なら不明
+  targetWeightKg?: number;
+  targetBodyFatPercent?: number;
+  setupCompleted?: boolean;
 }
 
 export interface UserData {

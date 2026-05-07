@@ -6,7 +6,8 @@
 
 import * as admin from "firebase-admin";
 import Anthropic from "@anthropic-ai/sdk";
-import { buildUserProfileContext } from "./prompts";
+import { buildUserContextBlock } from "../user/metrics";
+import type { UserProfile } from "../user/manager";
 
 const db = admin.firestore;
 
@@ -74,26 +75,12 @@ export async function saveConversationMessage(
 /**
  * ユーザープロフィールを取得
  */
-async function getUserProfile(userId: string): Promise<{
-  name: string;
-  goal: string;
-  level: string;
-  equipment: string;
-  frequency: number;
-} | null> {
+async function getUserProfile(userId: string): Promise<UserProfile | null> {
   const doc = await db().collection("users").doc(userId).get();
   if (!doc.exists) return null;
-
   const data = doc.data();
   if (!data?.profile) return null;
-
-  return {
-    name: data.profile.name || "ユーザー",
-    goal: data.profile.goal || "",
-    level: data.profile.level || "beginner",
-    equipment: data.profile.equipment || "",
-    frequency: data.profile.frequency || 3,
-  };
+  return data.profile as UserProfile;
 }
 
 /**
@@ -144,10 +131,8 @@ export async function buildConversationContext(
   // 現在のメッセージを追加
   messages.push({ role: "user", content: currentMessage });
 
-  // ユーザープロフィールコンテキストを構築
-  const userProfileContext = profile
-    ? buildUserProfileContext(profile)
-    : "";
+  // ユーザープロフィールコンテキストを構築（年代・身体スペック・派生メトリクス含む）
+  const userProfileContext = profile ? buildUserContextBlock(profile) : "";
 
   return { messages, userProfileContext };
 }

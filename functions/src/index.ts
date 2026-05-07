@@ -155,7 +155,7 @@ export const api = onRequest(
         return;
       }
 
-      // Profile read (LIFF Profile画面で使用、最小限のフィールドのみ返す)
+      // Profile read (LIFF Profile画面で使用、必要なフィールドを返す)
       if (req.method === "GET" && (path === "/api/profile" || path === "/profile")) {
         const userId = req.query.userId as string;
         if (!userId) { res.status(400).json({ error: "Missing userId" }); return; }
@@ -168,6 +168,17 @@ export const api = onRequest(
             frequency: user.profile.frequency || 3,
             trainerName: user.profile.trainerName,
             trainerType: user.profile.trainerType || "hot",
+            // セットアップヒアリング項目
+            birthYearRange: user.profile.birthYearRange,
+            sex: user.profile.sex,
+            heightCm: user.profile.heightCm,
+            weightKg: user.profile.weightKg,
+            targetMuscleGroups: user.profile.targetMuscleGroups ?? [],
+            activityLevel: user.profile.activityLevel,
+            bodyFatPercent: user.profile.bodyFatPercent,
+            targetWeightKg: user.profile.targetWeightKg,
+            targetBodyFatPercent: user.profile.targetBodyFatPercent,
+            setupCompleted: !!user.profile.setupCompleted,
           },
           settings: {
             notificationEnabled: user.settings.notificationEnabled,
@@ -182,11 +193,84 @@ export const api = onRequest(
 
       // Profile update
       if (req.method === "PUT" && (path === "/api/profile" || path === "/profile")) {
-        const { userId, goal, level, equipment, frequency, trainerName, trainerType } = req.body;
+        const body = req.body as Record<string, unknown>;
+        const userId = body.userId as string | undefined;
         if (!userId) { res.status(400).json({ error: "Missing userId" }); return; }
-        const updates: Record<string, unknown> = { goal, level, equipment, frequency };
-        if (trainerName !== undefined) updates.trainerName = trainerName;
-        if (trainerType !== undefined) updates.trainerType = trainerType;
+        const updates: Record<string, unknown> = {};
+
+        // 既存フィールド
+        const passthrough = [
+          "goal", "level", "equipment", "frequency",
+          "trainerName", "trainerType",
+        ];
+        for (const k of passthrough) {
+          if (body[k] !== undefined) updates[k] = body[k];
+        }
+
+        // セットアップ追加フィールド (バリデーション付き)
+        const allowedYearRange = ["20s", "30s", "40s", "50s", "60plus"];
+        const allowedSex = ["male", "female", "other"];
+        const allowedActivity = ["sedentary", "light", "moderate", "active"];
+        const allowedMuscle = ["chest", "back", "legs", "shoulders", "arms", "core", "all"];
+
+        if (body.birthYearRange !== undefined) {
+          if (typeof body.birthYearRange !== "string" || !allowedYearRange.includes(body.birthYearRange)) {
+            res.status(400).json({ error: "Invalid birthYearRange" });
+            return;
+          }
+          updates.birthYearRange = body.birthYearRange;
+        }
+        if (body.sex !== undefined) {
+          if (typeof body.sex !== "string" || !allowedSex.includes(body.sex)) {
+            res.status(400).json({ error: "Invalid sex" });
+            return;
+          }
+          updates.sex = body.sex;
+        }
+        const numField = (key: string, min: number, max: number) => {
+          if (body[key] === undefined) return;
+          if (body[key] === null) { updates[key] = null; return; }
+          const n = Number(body[key]);
+          if (!Number.isFinite(n) || n < min || n > max) {
+            throw new Error(`Invalid ${key}`);
+          }
+          updates[key] = n;
+        };
+        try {
+          numField("heightCm", 100, 230);
+          numField("weightKg", 20, 250);
+          numField("bodyFatPercent", 1, 60);
+          numField("targetWeightKg", 20, 250);
+          numField("targetBodyFatPercent", 1, 60);
+        } catch (e) {
+          res.status(400).json({ error: e instanceof Error ? e.message : "Validation failed" });
+          return;
+        }
+        if (body.activityLevel !== undefined) {
+          if (typeof body.activityLevel !== "string" || !allowedActivity.includes(body.activityLevel)) {
+            res.status(400).json({ error: "Invalid activityLevel" });
+            return;
+          }
+          updates.activityLevel = body.activityLevel;
+        }
+        if (body.targetMuscleGroups !== undefined) {
+          if (!Array.isArray(body.targetMuscleGroups)) {
+            res.status(400).json({ error: "targetMuscleGroups must be an array" });
+            return;
+          }
+          const filtered = body.targetMuscleGroups.filter(
+            (v) => typeof v === "string" && allowedMuscle.includes(v)
+          );
+          updates.targetMuscleGroups = Array.from(new Set(filtered));
+        }
+        if (body.setupCompleted !== undefined) {
+          updates.setupCompleted = !!body.setupCompleted;
+        }
+
+        if (Object.keys(updates).length === 0) {
+          res.status(400).json({ error: "No fields to update" });
+          return;
+        }
         await updateUserProfile(userId, updates);
         res.json({ success: true });
         return;
