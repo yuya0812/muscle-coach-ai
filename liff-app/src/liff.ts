@@ -42,4 +42,23 @@ export function closeLiff(): void {
   }
 }
 
+/**
+ * LINEトークにテキストを送信したあとLIFFを閉じる。
+ * `chat_message.write` スコープが必要（LINE Developers Console で有効化）。
+ * スコープ未付与・送信失敗時はエラーを飲み込み、closeWindowだけ実行する。
+ */
+export async function sendMessageAndCloseLiff(text: string): Promise<void> {
+  if (!liff.isInClient()) {
+    closeLiff()
+    return
+  }
+  try {
+    await liff.sendMessages([{ type: 'text', text }])
+  } catch (err) {
+    console.warn('[liff.sendMessages] failed (likely scope missing):', err)
+  } finally {
+    closeLiff()
+  }
+}
+
 export { liff }

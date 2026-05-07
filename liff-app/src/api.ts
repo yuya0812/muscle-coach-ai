@@ -46,10 +46,14 @@ export interface ProfileData {
     equipment: string | string[]
     frequency: number
     trainerName?: string
+    trainerType?: string
   }
   settings: {
     notificationEnabled: boolean
     notificationTime: string
+    notificationDays?: number[]
+    autoSendAnalysisEnabled?: boolean
+    autoSendAnalysisMessage?: string
   }
 }
 
@@ -66,6 +70,7 @@ export async function updateProfile(
     equipment: string[]
     frequency: number
     trainerName?: string
+    trainerType?: string
   },
 ): Promise<void> {
   await request('/api/profile', {
@@ -75,16 +80,27 @@ export async function updateProfile(
 }
 
 // ダッシュボードデータ取得
+export interface ExerciseSetGroup {
+  weight: number | null
+  reps: number | null
+  sets: number | null
+}
+
 export interface DashboardData {
   weeklyCount: number
   bodyPartFrequency: Record<string, number>
   progressData: {
     labels: string[]
-    datasets: { label: string; data: number[] }[]
+    // 0kg等の未記録ポイントは null（線をスキップしてグラフ描写）
+    datasets: { label: string; data: (number | null)[] }[]
   }
   recentWorkouts: {
     date: string
-    exercises: { name: string; sets: number; reps: number; weight: number }[]
+    exercises: {
+      name: string
+      setGroups: ExerciseSetGroup[]
+      totalVolume: number
+    }[]
   }[]
 }
 
@@ -95,7 +111,7 @@ export async function getDashboardData(
   return request(`/api/dashboard?userId=${userId}&period=${period}`)
 }
 
-// トレーニング記録取得
+// トレーニング記録取得（履歴表示用）
 export interface WorkoutRecord {
   id: string
   date: string
@@ -114,10 +130,16 @@ export async function getWorkoutLogs(
   return request(`/api/workouts?userId=${userId}&month=${month}`)
 }
 
-// 通知設定更新
+// 通知設定更新（曜日・自動送信設定も含む）
 export async function updateNotificationSettings(
   userId: string,
-  settings: { notificationEnabled: boolean; notificationTime: string },
+  settings: {
+    notificationEnabled: boolean
+    notificationTime: string
+    notificationDays?: number[]
+    autoSendAnalysisEnabled?: boolean
+    autoSendAnalysisMessage?: string
+  },
 ): Promise<void> {
   await request('/api/settings', {
     method: 'PUT',
@@ -136,10 +158,15 @@ export async function getSubscriptionStatus(userId: string): Promise<Subscriptio
   return request(`/api/subscription?userId=${userId}`)
 }
 
-// ワークアウト記録保存
+// ワークアウト記録保存（新形式: 1種目に複数セットグループ）
+export interface SaveExerciseInput {
+  name: string
+  setGroups: { weight?: number | null; reps?: number | null; sets?: number | null }[]
+}
+
 export async function saveWorkout(
   userId: string,
-  exercises: { name: string; weight?: number; reps?: number; sets?: number }[],
+  exercises: SaveExerciseInput[],
   date?: string
 ): Promise<void> {
   await request('/api/workouts', {
@@ -166,4 +193,18 @@ export interface MilestoneStatus {
 
 export async function getMilestones(userId: string): Promise<MilestoneStatus> {
   return request(`/api/milestones?userId=${userId}`)
+}
+
+// ユーザーが過去に手入力した種目名を取得（クイック選択候補）
+export async function getRecentCustomExercises(
+  userId: string,
+  exclude: string[] = [],
+  limit = 6,
+): Promise<{ names: string[] }> {
+  const params = new URLSearchParams({
+    userId,
+    limit: String(limit),
+  })
+  if (exclude.length > 0) params.set('exclude', exclude.join(','))
+  return request(`/api/workouts/exercises/recent?${params.toString()}`)
 }

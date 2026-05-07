@@ -10,8 +10,11 @@ const Nav = styled.nav`
   z-index: 100;
   background: ${theme.colors.surface};
   border-top: 1px solid ${theme.colors.border};
+  border-radius: 14px 14px 0 0;
   display: flex;
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  /* iPhoneのホームインジケータ領域＋追加余白でジェスチャー誤発火を防ぐ */
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
+  box-shadow: 0 -4px 14px rgba(0, 0, 0, 0.18);
 `
 
 const NavItem = styled.button<{ $active: boolean }>`
@@ -21,7 +24,7 @@ const NavItem = styled.button<{ $active: boolean }>`
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 10px 0 8px;
+  padding: 12px 0 14px;
   border: none;
   background: none;
   color: ${({ $active }) => ($active ? theme.colors.primary : theme.colors.textMuted)};
