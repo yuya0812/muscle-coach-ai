@@ -371,21 +371,68 @@ const SectionTitle = styled.h3`
 `
 
 const WorkoutItem = styled.div`
-  padding: 12px 0;
+  padding: 14px 0;
   border-bottom: 1px solid ${theme.colors.border};
-  &:last-child { border-bottom: none; }
+  &:last-child { border-bottom: none; padding-bottom: 0; }
+  &:first-child { padding-top: 0; }
 `
 
 const WorkoutDate = styled.div`
   font-size: 11px;
   color: ${theme.colors.textMuted};
-  margin-bottom: 5px;
+  margin-bottom: 8px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
 `
 
-const WorkoutExercises = styled.div`
+const WorkoutExerciseList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+`
+
+const WorkoutExerciseRow = styled.div`
+  background: ${theme.colors.surface2};
+  border: 1px solid ${theme.colors.border};
+  border-radius: 10px;
+  padding: 10px 12px;
+`
+
+const WorkoutExerciseName = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   font-size: 13px;
+  font-weight: 700;
   color: ${theme.colors.text};
-  line-height: 1.65;
+  margin-bottom: 6px;
+`
+
+const WorkoutVolumeBadge = styled.span`
+  font-size: 10px;
+  font-weight: 700;
+  color: ${theme.colors.primary};
+  background: ${theme.colors.primaryDim};
+  border: 1px solid ${theme.colors.primaryBorder};
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
+`
+
+const WorkoutSetGrid = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+`
+
+const WorkoutSetTag = styled.span`
+  font-size: 11.5px;
+  color: ${theme.colors.textMuted};
+  background: ${theme.colors.bg};
+  border: 1px solid ${theme.colors.border};
+  border-radius: 6px;
+  padding: 2px 7px;
 `
 
 const Empty = styled.p`
@@ -411,21 +458,29 @@ export default function Dashboard({ userId }: { userId: string }) {
   const navigate = useNavigate()
   const [data, setData] = useState<DashboardData | null>(null)
   const [period, setPeriod] = useState<Period>('1m')
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(true) // 初回ロード時のみ全画面ローディング
+  const [refreshing, setRefreshing] = useState(false) // 期間タブ切替時はローディング画面を出さずに静かに更新
   const [error, setError] = useState(false)
   const [remaining, setRemaining] = useState<number | null | undefined>(undefined)
   const [milestones, setMilestones] = useState<MilestoneStatus | null>(null)
 
-  const fetchData = () => {
-    setLoading(true)
+  const fetchData = (initial = false) => {
+    if (initial) setLoading(true)
+    else setRefreshing(true)
     setError(false)
     getDashboardData(userId, period)
       .then(setData)
       .catch(() => setError(true))
-      .finally(() => setLoading(false))
+      .finally(() => {
+        setLoading(false)
+        setRefreshing(false)
+      })
   }
 
-  useEffect(() => { fetchData() }, [userId, period])
+  useEffect(() => {
+    fetchData(data === null) // 初回のみ initial=true、以降は静的更新
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, period])
 
   useEffect(() => {
     getUsageStatus(userId)
@@ -443,7 +498,7 @@ export default function Dashboard({ userId }: { userId: string }) {
   if (error) return (
     <Page style={{ textAlign: 'center', paddingTop: 60 }}>
       <p style={{ color: theme.colors.textMuted, marginBottom: 16 }}>データの取得に失敗しました</p>
-      <ErrorBtn onClick={fetchData}>再試行</ErrorBtn>
+      <ErrorBtn onClick={() => fetchData(true)}>再試行</ErrorBtn>
     </Page>
   )
   if (!data) return <Page>データの取得に失敗しました</Page>
@@ -471,6 +526,7 @@ export default function Dashboard({ userId }: { userId: string }) {
       tension: 0.3,
       pointRadius: 3,
       borderWidth: 2,
+      spanGaps: false, // null（未記録）の前後で線を切る
     })),
   }
 
@@ -496,6 +552,16 @@ export default function Dashboard({ userId }: { userId: string }) {
     maintainAspectRatio: false,
     plugins: {
       legend: { position: 'bottom' as const, labels: { color: '#6b7385', font: { size: 11 } } },
+      tooltip: {
+        callbacks: {
+          // ツールチップに「総重量 N kg」を表示
+          label: (ctx: { dataset: { label?: string }; parsed: { y: number | null } }) => {
+            const v = ctx.parsed.y
+            if (v === null) return ''
+            return ` ${ctx.dataset.label}: ${v}kg`
+          },
+        },
+      },
     },
     scales: {
       x: {
@@ -503,6 +569,7 @@ export default function Dashboard({ userId }: { userId: string }) {
         ticks: { color: '#6b7385' },
       },
       y: {
+        beginAtZero: false, // 0kgからではなく実データの範囲で表示
         grid: { color: 'rgba(255,255,255,0.05)' },
         ticks: { color: '#6b7385' },
       },
@@ -609,10 +676,15 @@ export default function Dashboard({ userId }: { userId: string }) {
         </UpgradeNudge>
       )}
 
-      <PeriodTabs data-tour-id="dashboard-charts">
+      <PeriodTabs data-tour-id="dashboard-charts" style={{ opacity: refreshing ? 0.6 : 1, transition: 'opacity 0.15s' }}>
         {([['1w', '1週間'], ['1m', '1ヶ月'], ['3m', '3ヶ月']] as [Period, string][]).map(
           ([val, label]) => (
-            <PeriodTab key={val} $active={period === val} onClick={() => setPeriod(val)}>
+            <PeriodTab
+              key={val}
+              $active={period === val}
+              disabled={refreshing}
+              onClick={() => setPeriod(val)}
+            >
               {label}
             </PeriodTab>
           ),
@@ -641,9 +713,31 @@ export default function Dashboard({ userId }: { userId: string }) {
           data.recentWorkouts.map((w, i) => (
             <WorkoutItem key={i}>
               <WorkoutDate>{w.date}</WorkoutDate>
-              <WorkoutExercises>
-                {w.exercises.map((e) => `${e.name} ${e.weight}kg×${e.reps}回×${e.sets}セット`).join('、')}
-              </WorkoutExercises>
+              <WorkoutExerciseList>
+                {w.exercises.map((e, exIdx) => (
+                  <WorkoutExerciseRow key={exIdx}>
+                    <WorkoutExerciseName>
+                      <span>{e.name}</span>
+                      {e.totalVolume > 0 && (
+                        <WorkoutVolumeBadge>{e.totalVolume.toLocaleString()}kg</WorkoutVolumeBadge>
+                      )}
+                    </WorkoutExerciseName>
+                    {e.setGroups.length > 0 && (
+                      <WorkoutSetGrid>
+                        {e.setGroups.map((g, gIdx) => {
+                          const parts: string[] = []
+                          if (g.weight) parts.push(`${g.weight}kg`)
+                          if (g.reps) parts.push(`${g.reps}回`)
+                          if (g.sets) parts.push(`${g.sets}セット`)
+                          return parts.length > 0 ? (
+                            <WorkoutSetTag key={gIdx}>{parts.join(' × ')}</WorkoutSetTag>
+                          ) : null
+                        })}
+                      </WorkoutSetGrid>
+                    )}
+                  </WorkoutExerciseRow>
+                ))}
+              </WorkoutExerciseList>
             </WorkoutItem>
           ))
         )}
