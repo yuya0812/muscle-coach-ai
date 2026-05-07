@@ -2,8 +2,17 @@ import * as admin from "firebase-admin";
 import { onRequest } from "firebase-functions/v2/https";
 import { lineWebhook } from "./line/webhook";
 import { stripeWebhook, createCheckoutSession, createCustomerPortalSession } from "./subscription/stripe";
-import { getOrCreateUser, updateUserProfile, getRemainingUsage } from "./user/manager";
-import { getRecentWorkouts, getWorkoutsByMonth, saveWorkoutDirectly, getTotalWorkoutCount } from "./workout/recorder";
+import { getOrCreateUser, updateUserProfile, getRemainingUsage, updateUserSettings } from "./user/manager";
+import {
+  getRecentWorkouts,
+  getWorkoutsByMonth,
+  saveWorkoutDirectly,
+  getTotalWorkoutCount,
+  getRecentCustomExerciseNames,
+  normalizeExercise,
+  totalVolumeOf,
+  Exercise,
+} from "./workout/recorder";
 import { authenticateRequest } from "./auth/verifyLiffToken";
 import { sendWeeklyReports } from "./reports/weeklyReport";
 import { sendScheduledNotifications } from "./notifications/scheduledNotifications";
@@ -72,7 +81,10 @@ export const api = onRequest(
 
         const workouts = snapshot.docs.map((doc) => {
           const data = doc.data();
-          return { date: data.date?.toDate?.() ? data.date.toDate() : new Date(), exercises: data.exercises || [] };
+          return {
+            date: data.date?.toDate?.() ? data.date.toDate() : new Date(),
+            exercises: ((data.exercises || []) as Exercise[]).map((ex) => normalizeExercise(ex)),
+          };
         });
 
         const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -94,29 +106,48 @@ export const api = onRequest(
           }
         }
 
-        const exerciseWeights: Record<string, { date: string; weight: number }[]> = {};
-        for (const w of workouts) {
+        // 種目ごと・日付ごとに「総重量 = Σ(weight × reps × sets)」を集計
+        const exerciseVolumes: Record<string, Map<string, number>> = {};
+        const sortedWorkouts = [...workouts].sort((a, b) => a.date.getTime() - b.date.getTime());
+        for (const w of sortedWorkouts) {
           const jst = new Date(w.date.getTime() + 9 * 60 * 60 * 1000);
           const dateStr = `${jst.getMonth() + 1}/${jst.getDate()}`;
           for (const ex of w.exercises) {
-            if (ex.weight) {
-              if (!exerciseWeights[ex.name]) exerciseWeights[ex.name] = [];
-              exerciseWeights[ex.name].push({ date: dateStr, weight: ex.weight });
-            }
+            const vol = totalVolumeOf(ex);
+            if (vol <= 0) continue; // 重量未入力等は除外
+            if (!exerciseVolumes[ex.name]) exerciseVolumes[ex.name] = new Map();
+            const map = exerciseVolumes[ex.name];
+            map.set(dateStr, (map.get(dateStr) ?? 0) + vol);
           }
         }
-        const topExercises = Object.entries(exerciseWeights).sort((a, b) => b[1].length - a[1].length).slice(0, 4);
-        const allDates = [...new Set(topExercises.flatMap(([, data]) => data.map((d) => d.date)))].reverse();
-        const datasets = topExercises.map(([name, data]) => ({
+        // よく記録されている上位4種目
+        const topExercises = Object.entries(exerciseVolumes)
+          .sort((a, b) => b[1].size - a[1].size)
+          .slice(0, 4);
+        // 日付軸: 上位4種目に出現した日付の和集合（時系列順）
+        const allDatesSet = new Set<string>();
+        for (const [, dateMap] of topExercises) {
+          for (const d of dateMap.keys()) allDatesSet.add(d);
+        }
+        const allDates = Array.from(allDatesSet).sort((a, b) => {
+          const [am, ad] = a.split("/").map(Number);
+          const [bm, bd] = b.split("/").map(Number);
+          return am !== bm ? am - bm : ad - bd;
+        });
+        // datasets: 0kg時はnullを返してChart.jsの spanGaps で線をスキップ可能に
+        const datasets = topExercises.map(([name, dateMap]) => ({
           label: name,
-          data: allDates.map((date) => { const e = data.find((d) => d.date === date); return e ? e.weight : 0; }),
+          data: allDates.map((d) => dateMap.get(d) ?? null),
         }));
+
         const recentWorkouts = workouts.slice(0, 10).map((w) => {
           const jst = new Date(w.date.getTime() + 9 * 60 * 60 * 1000);
           return {
             date: `${jst.getFullYear()}/${jst.getMonth() + 1}/${jst.getDate()}`,
-            exercises: w.exercises.map((e: { name: string; weight?: number; reps?: number; sets?: number }) => ({
-              name: e.name, weight: e.weight || 0, reps: e.reps || 0, sets: e.sets || 0,
+            exercises: w.exercises.map((e) => ({
+              name: e.name,
+              setGroups: e.setGroups ?? [],
+              totalVolume: totalVolumeOf(e),
             })),
           };
         });
@@ -136,10 +167,14 @@ export const api = onRequest(
             equipment: user.profile.equipment || "",
             frequency: user.profile.frequency || 3,
             trainerName: user.profile.trainerName,
+            trainerType: user.profile.trainerType || "hot",
           },
           settings: {
             notificationEnabled: user.settings.notificationEnabled,
             notificationTime: user.settings.notificationTime,
+            notificationDays: user.settings.notificationDays ?? [],
+            autoSendAnalysisEnabled: user.settings.autoSendAnalysisEnabled ?? false,
+            autoSendAnalysisMessage: user.settings.autoSendAnalysisMessage ?? "今日の記録を分析して",
           },
         });
         return;
@@ -147,9 +182,12 @@ export const api = onRequest(
 
       // Profile update
       if (req.method === "PUT" && (path === "/api/profile" || path === "/profile")) {
-        const { userId, goal, level, equipment, frequency } = req.body;
+        const { userId, goal, level, equipment, frequency, trainerName, trainerType } = req.body;
         if (!userId) { res.status(400).json({ error: "Missing userId" }); return; }
-        await updateUserProfile(userId, { goal, level, equipment, frequency });
+        const updates: Record<string, unknown> = { goal, level, equipment, frequency };
+        if (trainerName !== undefined) updates.trainerName = trainerName;
+        if (trainerType !== undefined) updates.trainerType = trainerType;
+        await updateUserProfile(userId, updates);
         res.json({ success: true });
         return;
       }
@@ -167,13 +205,39 @@ export const api = onRequest(
         return;
       }
 
-      // Notification settings
+      // Notification & misc settings
       if (req.method === "PUT" && (path === "/api/settings" || path === "/settings")) {
-        const { userId, notificationEnabled, notificationTime } = req.body;
+        const {
+          userId,
+          notificationEnabled,
+          notificationTime,
+          notificationDays,
+          autoSendAnalysisEnabled,
+          autoSendAnalysisMessage,
+        } = req.body;
         if (!userId) { res.status(400).json({ error: "Missing userId" }); return; }
-        await db().collection("users").doc(userId).update({
-          "settings.notificationEnabled": notificationEnabled ?? false,
-          "settings.notificationTime": notificationTime || "09:00",
+        // バリデーション: 曜日は0-6の整数配列のみ受理
+        let validatedDays: number[] | undefined;
+        if (notificationDays !== undefined) {
+          if (!Array.isArray(notificationDays)) { res.status(400).json({ error: "notificationDays must be an array" }); return; }
+          validatedDays = notificationDays
+            .map((d: unknown) => Number(d))
+            .filter((n: number) => Number.isInteger(n) && n >= 0 && n <= 6);
+          // 重複排除
+          validatedDays = Array.from(new Set(validatedDays));
+        }
+        // 自動送信メッセージは長さ制限
+        let validatedMessage: string | undefined;
+        if (autoSendAnalysisMessage !== undefined) {
+          if (typeof autoSendAnalysisMessage !== "string") { res.status(400).json({ error: "autoSendAnalysisMessage must be string" }); return; }
+          validatedMessage = autoSendAnalysisMessage.replace(/[\r\n\t]/g, " ").trim().slice(0, 200);
+        }
+        await updateUserSettings(userId, {
+          notificationEnabled,
+          notificationTime: notificationTime || undefined,
+          notificationDays: validatedDays,
+          autoSendAnalysisEnabled,
+          autoSendAnalysisMessage: validatedMessage,
         });
         res.json({ success: true });
         return;
@@ -202,7 +266,20 @@ export const api = onRequest(
         return;
       }
 
-      // Workouts
+      // Workouts: 履歴一覧 (/workouts/exercises/recent はカスタム種目候補を返す)
+      if (req.method === "GET" && (path === "/api/workouts/exercises/recent" || path === "/workouts/exercises/recent")) {
+        const userId = req.query.userId as string;
+        if (!userId) { res.status(400).json({ error: "Missing userId" }); return; }
+        const limit = Math.min(20, Math.max(1, Number(req.query.limit) || 6));
+        const exclude = ((req.query.exclude as string) || "")
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
+        const names = await getRecentCustomExerciseNames(userId, limit, new Set(exclude));
+        res.json({ names });
+        return;
+      }
+
       if (req.method === "GET" && (path === "/api/workouts" || path === "/workouts" || path.startsWith("/workouts/"))) {
         const userId = (req.query.userId as string) || path.split("/workouts/")[1];
         if (!userId) { res.status(400).json({ error: "Missing userId" }); return; }
@@ -210,13 +287,21 @@ export const api = onRequest(
         const workouts = month
           ? await getWorkoutsByMonth(userId, month)
           : await getRecentWorkouts(userId, 30);
+        // フロント既存の WorkoutLog 表示が { exercises: [{ sets: [{weight, reps}] }] } 形式を期待しているので
+        // setGroups を sets配列に展開する形でレスポンス
         const formatted = workouts.map((w) => ({
           id: "",
           date: w.date?.toDate?.() ? w.date.toDate().toISOString() : new Date().toISOString(),
-          exercises: w.exercises.map((e) => ({
-            name: e.name, bodyPart: "",
-            sets: Array.from({ length: e.sets || 1 }, () => ({ weight: e.weight || 0, reps: e.reps || 0 })),
-          })),
+          exercises: w.exercises.map((e) => {
+            const flatSets: { weight: number; reps: number }[] = [];
+            for (const g of e.setGroups ?? []) {
+              const count = g.sets ?? 1;
+              for (let i = 0; i < count; i++) {
+                flatSets.push({ weight: g.weight ?? 0, reps: g.reps ?? 0 });
+              }
+            }
+            return { name: e.name, bodyPart: "", sets: flatSets };
+          }),
         }));
         res.json(formatted);
         return;

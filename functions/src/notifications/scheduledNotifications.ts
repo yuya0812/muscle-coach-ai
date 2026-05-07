@@ -56,6 +56,8 @@ export const sendScheduledNotifications = onSchedule(
       `[ScheduledNotifications] JST=${now.toISOString()}, hour=${currentHour}, monday=${isMonday}, targets=${usersSnapshot.size}`
     );
 
+    const currentDay = now.getDay(); // 0=日, 1=月, ...
+
     for (const userDoc of usersSnapshot.docs) {
       const data = userDoc.data();
       const notifTime: string = data.settings?.notificationTime || "09:00";
@@ -69,16 +71,29 @@ export const sendScheduledNotifications = onSchedule(
       const nickname: string = data.profile?.nickname || data.profile?.name || "ゲスト";
       const sender = { name: trainerName };
 
-      try {
-        if (isMonday) {
+      // 月曜は週次レポートを必ず送る（プレミアム会員のみ）。曜日設定の影響を受けない固定通知。
+      if (isMonday) {
+        try {
           await sendWeeklyReportToUser(userId);
-        } else {
-          const text = getReminderMessage(data.profile?.trainerType || "hot", nickname);
-          await pushMessages(userId, [
-            { type: "text", text, sender } as line.messagingApi.Message,
-          ]);
+          console.log(`[ScheduledNotifications] Weekly report sent to ${userId}`);
+        } catch (error) {
+          console.error(`[ScheduledNotifications] Weekly report failed for ${userId}:`, error);
         }
-        console.log(`[ScheduledNotifications] Sent to ${userId} (monday=${isMonday})`);
+        continue;
+      }
+
+      // 任意の日次リマインダーは notificationDays に現在曜日が含まれる場合のみ送る
+      const notifDays: number[] = Array.isArray(data.settings?.notificationDays)
+        ? data.settings.notificationDays
+        : [];
+      if (!notifDays.includes(currentDay)) continue;
+
+      try {
+        const text = getReminderMessage(data.profile?.trainerType || "hot", nickname);
+        await pushMessages(userId, [
+          { type: "text", text, sender } as line.messagingApi.Message,
+        ]);
+        console.log(`[ScheduledNotifications] Daily reminder sent to ${userId} (day=${currentDay})`);
       } catch (error) {
         console.error(`[ScheduledNotifications] Failed for ${userId}:`, error);
       }
