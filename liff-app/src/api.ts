@@ -47,6 +47,17 @@ export interface ProfileData {
     frequency: number
     trainerName?: string
     trainerType?: string
+    // セットアップヒアリング項目
+    birthYearRange?: string
+    sex?: string
+    heightCm?: number
+    weightKg?: number
+    targetMuscleGroups?: string[]
+    activityLevel?: string
+    bodyFatPercent?: number | null
+    targetWeightKg?: number | null
+    targetBodyFatPercent?: number | null
+    setupCompleted?: boolean
   }
   settings: {
     notificationEnabled: boolean
@@ -61,18 +72,27 @@ export async function getProfile(userId: string): Promise<ProfileData> {
   return request(`/api/profile?userId=${userId}`)
 }
 
-// プロフィール更新
-export async function updateProfile(
-  userId: string,
-  profile: {
-    goal: string
-    level: string
-    equipment: string[]
-    frequency: number
-    trainerName?: string
-    trainerType?: string
-  },
-): Promise<void> {
+// プロフィール更新（セットアップ追加項目もこのエンドポイントで送れる）
+export interface ProfileUpdateInput {
+  goal?: string
+  level?: string
+  equipment?: string[]
+  frequency?: number
+  trainerName?: string
+  trainerType?: string
+  birthYearRange?: string
+  sex?: string
+  heightCm?: number | null
+  weightKg?: number | null
+  targetMuscleGroups?: string[]
+  activityLevel?: string
+  bodyFatPercent?: number | null
+  targetWeightKg?: number | null
+  targetBodyFatPercent?: number | null
+  setupCompleted?: boolean
+}
+
+export async function updateProfile(userId: string, profile: ProfileUpdateInput): Promise<void> {
   await request('/api/profile', {
     method: 'PUT',
     body: JSON.stringify({ userId, ...profile }),

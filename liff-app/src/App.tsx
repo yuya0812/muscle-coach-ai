@@ -10,6 +10,7 @@ import Profile from './pages/Profile'
 import WorkoutLog from './pages/WorkoutLog'
 import WorkoutInput from './pages/WorkoutInput'
 import Onboarding from './pages/Onboarding'
+import Setup from './pages/Setup'
 import { TourProvider, useTour, hasSeenTour } from './tour/TourContext'
 import TourOverlay from './tour/TourOverlay'
 
@@ -72,6 +73,7 @@ export default function App() {
         <TourBootstrap userId={user.userId} />
         <Routes>
           <Route path="/onboarding" element={<Onboarding userId={user.userId} />} />
+          <Route path="/setup" element={<Setup userId={user.userId} />} />
           <Route path="/dashboard" element={<Dashboard userId={user.userId} />} />
           <Route path="/subscribe" element={<Subscribe userId={user.userId} />} />
           <Route path="/profile" element={<Profile userId={user.userId} />} />

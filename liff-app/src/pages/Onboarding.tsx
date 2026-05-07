@@ -167,9 +167,9 @@ function markOnboarded(userId: string) {
 export default function Onboarding({ userId }: { userId: string }) {
   const navigate = useNavigate()
 
-  const goToProfile = () => {
+  const goToSetup = () => {
     markOnboarded(userId)
-    navigate('/profile')
+    navigate('/setup')
   }
 
   const skip = () => {
@@ -224,16 +224,16 @@ export default function Onboarding({ userId }: { userId: string }) {
       </FlowCards>
 
       <Nudge>
-        <NudgeText>まずプロフィールを設定しましょう</NudgeText>
+        <NudgeText>まずヒアリングを始めましょう</NudgeText>
         <NudgeSub>
-          目標や使える器具を教えると、AIのアドバイスがあなた専用になります
+          年代・体格・目標などをいくつか教えてください。AIのアドバイスがあなた専用に最適化されます（60秒程度）。
         </NudgeSub>
-        <PrimaryButton onClick={goToProfile}>
-          プロフィールを設定する →
+        <PrimaryButton onClick={goToSetup}>
+          セットアップを始める →
         </PrimaryButton>
       </Nudge>
 
-      <SkipLink onClick={skip}>スキップしてホームへ</SkipLink>
+      <SkipLink onClick={skip}>あとで設定する</SkipLink>
     </Page>
   )
 }
