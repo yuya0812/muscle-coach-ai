@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 import { theme } from '../theme'
 import { updateProfile, updateNotificationSettings, getProfile } from '../api'
@@ -194,6 +195,39 @@ const TourLinkButton = styled.button`
   &:active { color: ${theme.colors.text}; }
 `
 
+const SetupNudge = styled.div`
+  background: ${theme.colors.goldDim};
+  border: 1px solid ${theme.colors.goldBorder};
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-bottom: ${theme.spacing.md};
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+`
+
+const SetupNudgeText = styled.div`
+  font-size: 12.5px;
+  color: ${theme.colors.gold};
+  font-weight: 600;
+  flex: 1;
+  line-height: 1.5;
+`
+
+const SetupNudgeButton = styled.button`
+  padding: 8px 14px;
+  border: none;
+  border-radius: 999px;
+  background: ${theme.colors.gold};
+  color: #1a1a1a;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  &:active { opacity: 0.85; }
+`
+
 const SuccessMsg = styled.div`
   background: ${theme.colors.primaryDim};
   border: 1px solid ${theme.colors.primaryBorder};
@@ -318,6 +352,33 @@ const EQUIPMENT = [
   { value: 'gym', label: 'ジム器具' },
 ]
 
+const BIRTH_YEAR_OPTIONS = [
+  { value: '20s', label: '20代' },
+  { value: '30s', label: '30代' },
+  { value: '40s', label: '40代' },
+  { value: '50s', label: '50代' },
+  { value: '60plus', label: '60代以上' },
+]
+const SEX_OPTIONS = [
+  { value: 'male', label: '男性' },
+  { value: 'female', label: '女性' },
+  { value: 'other', label: '回答しない' },
+]
+const MUSCLE_OPTIONS = [
+  { value: 'chest', label: '胸' },
+  { value: 'back', label: '背中' },
+  { value: 'legs', label: '脚' },
+  { value: 'shoulders', label: '肩' },
+  { value: 'arms', label: '腕' },
+  { value: 'core', label: '腹' },
+]
+const ACTIVITY_OPTIONS = [
+  { value: 'sedentary', label: '座り中心' },
+  { value: 'light', label: '軽い活動' },
+  { value: 'moderate', label: '活発' },
+  { value: 'active', label: 'かなり活動的' },
+]
+
 const DAYS_OF_WEEK = [
   { value: 0, label: '日', isHoliday: true },
   { value: 1, label: '月', isHoliday: false },
@@ -334,6 +395,7 @@ function labelOf<T extends { value: string; label: string }>(opts: T[], v: strin
 
 export default function Profile({ userId }: { userId: string }) {
   const tour = useTour()
+  const navigate = useNavigate()
 
   // 編集中の値
   const [trainerName, setTrainerName] = useState('')
@@ -342,6 +404,19 @@ export default function Profile({ userId }: { userId: string }) {
   const [level, setLevel] = useState('beginner')
   const [equipment, setEquipment] = useState<string[]>(['bodyweight'])
   const [frequency, setFrequency] = useState(3)
+
+  // セットアップ追加項目
+  const [birthYearRange, setBirthYearRange] = useState('')
+  const [sex, setSex] = useState('')
+  const [heightCm, setHeightCm] = useState('')
+  const [weightKg, setWeightKg] = useState('')
+  const [targetMuscleGroups, setTargetMuscleGroups] = useState<string[]>([])
+  const [activityLevel, setActivityLevel] = useState('')
+  const [bodyFatPercent, setBodyFatPercent] = useState('')
+  const [targetWeightKg, setTargetWeightKg] = useState('')
+  const [targetBodyFatPercent, setTargetBodyFatPercent] = useState('')
+  const [setupCompleted, setSetupCompleted] = useState(false)
+  const [aboutMode, setAboutMode] = useState<'view' | 'edit'>('view')
 
   const [notificationEnabled, setNotificationEnabled] = useState(false)
   const [notificationTime, setNotificationTime] = useState('09:00')
@@ -370,6 +445,18 @@ export default function Profile({ userId }: { userId: string }) {
         if (d.profile?.frequency) setFrequency(d.profile.frequency)
         if (d.profile?.trainerName) setTrainerName(d.profile.trainerName)
         if (d.profile?.trainerType) setTrainerType(d.profile.trainerType)
+        if (d.profile?.birthYearRange) setBirthYearRange(d.profile.birthYearRange)
+        if (d.profile?.sex) setSex(d.profile.sex)
+        if (d.profile?.heightCm) setHeightCm(String(d.profile.heightCm))
+        if (d.profile?.weightKg) setWeightKg(String(d.profile.weightKg))
+        if (Array.isArray(d.profile?.targetMuscleGroups)) {
+          setTargetMuscleGroups(d.profile.targetMuscleGroups)
+        }
+        if (d.profile?.activityLevel) setActivityLevel(d.profile.activityLevel)
+        if (d.profile?.bodyFatPercent != null) setBodyFatPercent(String(d.profile.bodyFatPercent))
+        if (d.profile?.targetWeightKg != null) setTargetWeightKg(String(d.profile.targetWeightKg))
+        if (d.profile?.targetBodyFatPercent != null) setTargetBodyFatPercent(String(d.profile.targetBodyFatPercent))
+        setSetupCompleted(!!d.profile?.setupCompleted)
         if (d.settings?.notificationEnabled !== undefined) {
           setNotificationEnabled(d.settings.notificationEnabled)
         }
@@ -419,6 +506,15 @@ export default function Profile({ userId }: { userId: string }) {
           frequency,
           trainerName: trainerName || undefined,
           trainerType,
+          birthYearRange: birthYearRange || undefined,
+          sex: sex || undefined,
+          heightCm: heightCm ? Number(heightCm) : null,
+          weightKg: weightKg ? Number(weightKg) : null,
+          targetMuscleGroups,
+          activityLevel: activityLevel || undefined,
+          bodyFatPercent: bodyFatPercent ? Number(bodyFatPercent) : null,
+          targetWeightKg: targetWeightKg ? Number(targetWeightKg) : null,
+          targetBodyFatPercent: targetBodyFatPercent ? Number(targetBodyFatPercent) : null,
         }),
         updateNotificationSettings(userId, {
           notificationEnabled,
@@ -432,6 +528,7 @@ export default function Profile({ userId }: { userId: string }) {
       setHasInitialData(true)
       setProfileMode('view')
       setNotifMode('view')
+      setAboutMode('view')
       setTimeout(() => setSaved(false), 3000)
     } catch {
       alert('保存に失敗しました。もう一度お試しください。')
@@ -447,7 +544,96 @@ export default function Profile({ userId }: { userId: string }) {
     return [...days].sort().map((d) => DAYS_OF_WEEK[d].label).join(' ')
   }
 
-  const isAnyEdit = profileMode === 'edit' || notifMode === 'edit' || !hasInitialData
+  const isAnyEdit = profileMode === 'edit' || notifMode === 'edit' || aboutMode === 'edit' || !hasInitialData
+
+  const toggleMuscle = (val: string) => {
+    setTargetMuscleGroups((prev) =>
+      prev.includes(val) ? prev.filter((v) => v !== val) : [...prev, val],
+    )
+  }
+
+  // ===== About (view / edit) =====
+  const aboutSection = aboutMode === 'view' && hasInitialData ? (
+    <Card>
+      <SectionHeader>
+        <SectionLabel>あなたについて</SectionLabel>
+        <EditButton onClick={() => setAboutMode('edit')}>編集</EditButton>
+      </SectionHeader>
+      <ViewRow><ViewLabel>年代</ViewLabel><ViewValue>{labelOf(BIRTH_YEAR_OPTIONS, birthYearRange) || '(未設定)'}</ViewValue></ViewRow>
+      <ViewRow><ViewLabel>性別</ViewLabel><ViewValue>{labelOf(SEX_OPTIONS, sex) || '(未設定)'}</ViewValue></ViewRow>
+      <ViewRow><ViewLabel>身長</ViewLabel><ViewValue>{heightCm ? `${heightCm} cm` : '(未設定)'}</ViewValue></ViewRow>
+      <ViewRow><ViewLabel>体重</ViewLabel><ViewValue>{weightKg ? `${weightKg} kg` : '(未設定)'}</ViewValue></ViewRow>
+      <ViewRow>
+        <ViewLabel>重点部位</ViewLabel>
+        <ViewValue>
+          {targetMuscleGroups.length > 0
+            ? targetMuscleGroups.map((m) => labelOf(MUSCLE_OPTIONS, m)).join(' / ')
+            : '(未設定)'}
+        </ViewValue>
+      </ViewRow>
+      <ViewRow><ViewLabel>活動レベル</ViewLabel><ViewValue>{labelOf(ACTIVITY_OPTIONS, activityLevel) || '(未設定)'}</ViewValue></ViewRow>
+      <ViewRow><ViewLabel>体脂肪率</ViewLabel><ViewValue>{bodyFatPercent ? (Number(bodyFatPercent) < 0 ? 'わからない' : `${bodyFatPercent}%`) : '(未設定)'}</ViewValue></ViewRow>
+      <ViewRow><ViewLabel>目標体重</ViewLabel><ViewValue>{targetWeightKg ? `${targetWeightKg} kg` : '(未設定)'}</ViewValue></ViewRow>
+      <ViewRow><ViewLabel>目標体脂肪率</ViewLabel><ViewValue>{targetBodyFatPercent ? `${targetBodyFatPercent}%` : '(未設定)'}</ViewValue></ViewRow>
+    </Card>
+  ) : (
+    <Card>
+      <SectionHeader>
+        <SectionLabel>あなたについて</SectionLabel>
+        {hasInitialData && <EditButton onClick={() => setAboutMode('view')}>キャンセル</EditButton>}
+      </SectionHeader>
+      <Label>年代</Label>
+      <OptionGrid style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+        {BIRTH_YEAR_OPTIONS.map((o) => (
+          <OptionButton key={o.value} $selected={birthYearRange === o.value} onClick={() => setBirthYearRange(o.value)}>
+            {o.label}
+          </OptionButton>
+        ))}
+      </OptionGrid>
+
+      <Label>性別</Label>
+      <OptionGrid style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+        {SEX_OPTIONS.map((o) => (
+          <OptionButton key={o.value} $selected={sex === o.value} onClick={() => setSex(o.value)}>
+            {o.label}
+          </OptionButton>
+        ))}
+      </OptionGrid>
+
+      <Label>身長 (cm)</Label>
+      <TextInput type="number" inputMode="numeric" placeholder="170" value={heightCm} onChange={(e) => setHeightCm(e.target.value)} />
+
+      <Label>体重 (kg)</Label>
+      <TextInput type="number" inputMode="decimal" placeholder="65" value={weightKg} onChange={(e) => setWeightKg(e.target.value)} />
+
+      <Label>重点的に鍛えたい部位（複数可）</Label>
+      <OptionGrid style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+        {MUSCLE_OPTIONS.map((o) => (
+          <OptionButton key={o.value} $selected={targetMuscleGroups.includes(o.value)} onClick={() => toggleMuscle(o.value)}>
+            {o.label}
+          </OptionButton>
+        ))}
+      </OptionGrid>
+
+      <Label>日常の活動レベル</Label>
+      <OptionGrid>
+        {ACTIVITY_OPTIONS.map((o) => (
+          <OptionButton key={o.value} $selected={activityLevel === o.value} onClick={() => setActivityLevel(o.value)}>
+            {o.label}
+          </OptionButton>
+        ))}
+      </OptionGrid>
+
+      <Label>体脂肪率（任意・%）</Label>
+      <TextInput type="number" inputMode="decimal" placeholder="例: 18" value={bodyFatPercent} onChange={(e) => setBodyFatPercent(e.target.value)} />
+
+      <Label>目標体重（任意・kg）</Label>
+      <TextInput type="number" inputMode="decimal" placeholder="例: 60" value={targetWeightKg} onChange={(e) => setTargetWeightKg(e.target.value)} />
+
+      <Label>目標体脂肪率（任意・%）</Label>
+      <TextInput type="number" inputMode="decimal" placeholder="例: 15" value={targetBodyFatPercent} onChange={(e) => setTargetBodyFatPercent(e.target.value)} />
+    </Card>
+  )
 
   // ===== Profile (view / edit) =====
   const profileSection = profileMode === 'view' && hasInitialData ? (
@@ -614,7 +800,17 @@ export default function Profile({ userId }: { userId: string }) {
 
       {saved && <SuccessMsg>保存しました！</SuccessMsg>}
 
+      {!setupCompleted && hasInitialData && (
+        <SetupNudge>
+          <SetupNudgeText>
+            セットアップを完了すると、AIのアドバイスが体格・年代・活動量に基づいて最適化されます。
+          </SetupNudgeText>
+          <SetupNudgeButton onClick={() => navigate('/setup')}>セットアップ</SetupNudgeButton>
+        </SetupNudge>
+      )}
+
       {profileSection}
+      {aboutSection}
       {notifSection}
 
       {isAnyEdit ? (
@@ -623,7 +819,7 @@ export default function Profile({ userId }: { userId: string }) {
             {saving ? '保存中...' : '設定を保存'}
           </SaveButton>
           {hasInitialData && (
-            <CancelButton onClick={() => { setProfileMode('view'); setNotifMode('view') }}>
+            <CancelButton onClick={() => { setProfileMode('view'); setNotifMode('view'); setAboutMode('view') }}>
               キャンセル
             </CancelButton>
           )}
