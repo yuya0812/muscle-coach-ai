@@ -4,11 +4,25 @@ import { WORKOUT_PARSE_PROMPT } from "../ai/prompts";
 
 const db = admin.firestore;
 
-export interface Exercise {
-  name: string;
+// 1種目を構成するセットグループ（同じ重量×回数のセット数を1行で表現）
+export interface ExerciseSetGroup {
   weight: number | null;
   reps: number | null;
   sets: number | null;
+}
+
+// Firestoreに保存される新形式
+export interface Exercise {
+  name: string;
+  setGroups: ExerciseSetGroup[];
+}
+
+// 旧形式（互換性のため読み込みのみサポート）
+interface LegacyExercise {
+  name: string;
+  weight?: number | null;
+  reps?: number | null;
+  sets?: number | null;
 }
 
 export interface WorkoutRecord {
@@ -17,13 +31,54 @@ export interface WorkoutRecord {
   notes: string;
 }
 
+// 旧形式 ⇄ 新形式の正規化（読み込み時のbackward-compatibility）
+export function normalizeExercise(raw: Exercise | LegacyExercise): Exercise {
+  if ("setGroups" in raw && Array.isArray(raw.setGroups)) {
+    return raw;
+  }
+  const legacy = raw as LegacyExercise;
+  const hasAnyValue =
+    legacy.weight != null || legacy.reps != null || legacy.sets != null;
+  return {
+    name: legacy.name,
+    setGroups: hasAnyValue
+      ? [
+          {
+            weight: legacy.weight ?? null,
+            reps: legacy.reps ?? null,
+            sets: legacy.sets ?? null,
+          },
+        ]
+      : [],
+  };
+}
+
+export function normalizeWorkoutRecord(raw: WorkoutRecord): WorkoutRecord {
+  return {
+    ...raw,
+    exercises: (raw.exercises ?? []).map((ex) =>
+      normalizeExercise(ex as Exercise | LegacyExercise)
+    ),
+  };
+}
+
+// 1種目の総重量計算: Σ (weight × reps × sets) over all setGroups
+export function totalVolumeOf(exercise: Exercise): number {
+  return (exercise.setGroups ?? []).reduce((sum, g) => {
+    const w = g.weight ?? 0;
+    const r = g.reps ?? 0;
+    const s = g.sets ?? 0;
+    return sum + w * r * s;
+  }, 0);
+}
+
 export async function parseAndSaveWorkout(
   userId: string,
   text: string
 ): Promise<{ exercises: Exercise[]; message: string }> {
   const jsonStr = await getAIJsonResponse(WORKOUT_PARSE_PROMPT, text);
 
-  let parsed: { exercises: Exercise[] };
+  let parsed: { exercises: LegacyExercise[] };
   try {
     parsed = JSON.parse(jsonStr);
   } catch {
@@ -40,9 +95,12 @@ export async function parseAndSaveWorkout(
     };
   }
 
+  // AIパース結果は旧形式相当 → 正規化して保存
+  const normalized = parsed.exercises.map((e) => normalizeExercise(e));
+
   const workout: WorkoutRecord = {
     date: admin.firestore.Timestamp.now(),
-    exercises: parsed.exercises,
+    exercises: normalized,
     notes: text,
   };
 
@@ -52,18 +110,22 @@ export async function parseAndSaveWorkout(
     .collection("workouts")
     .add(workout);
 
-  const summary = parsed.exercises
+  const summary = normalized
     .map((e) => {
-      const parts = [e.name];
-      if (e.weight) parts.push(`${e.weight}kg`);
-      if (e.reps) parts.push(`${e.reps}回`);
-      if (e.sets) parts.push(`${e.sets}セット`);
-      return parts.join(" ");
+      const lines = [e.name];
+      e.setGroups.forEach((g) => {
+        const parts: string[] = [];
+        if (g.weight) parts.push(`${g.weight}kg`);
+        if (g.reps) parts.push(`${g.reps}回`);
+        if (g.sets) parts.push(`${g.sets}セット`);
+        if (parts.length) lines.push(`  ${parts.join(" ")}`);
+      });
+      return lines.join("\n");
     })
     .join("\n");
 
   return {
-    exercises: parsed.exercises,
+    exercises: normalized,
     message: `記録しました！\n\n${summary}\n\nお疲れ様でした！`,
   };
 }
@@ -86,9 +148,23 @@ function sanitizeNumber(raw: unknown, max: number): number | null {
   return n;
 }
 
+function sanitizeSetGroup(raw: unknown): ExerciseSetGroup {
+  const g = (raw ?? {}) as Partial<ExerciseSetGroup>;
+  return {
+    weight: sanitizeNumber(g.weight, 1000),
+    reps: sanitizeNumber(g.reps, 1000),
+    sets: sanitizeNumber(g.sets, 100),
+  };
+}
+
+// 入力 Exercise（新形式 setGroups 配列 / 旧形式 weight/reps/sets フラット）両方を受け入れる
+type IncomingExercise =
+  | { name: unknown; setGroups: unknown[] }
+  | { name: unknown; weight?: unknown; reps?: unknown; sets?: unknown };
+
 export async function saveWorkoutDirectly(
   userId: string,
-  exercises: Exercise[],
+  exercises: IncomingExercise[],
   dateStr?: string // "YYYY-MM-DD" 形式、省略時は今日
 ): Promise<void> {
   // 入力バリデーション: 1リクエストあたりの種目数を制限
@@ -97,12 +173,22 @@ export async function saveWorkoutDirectly(
   }
 
   const sanitized: Exercise[] = exercises
-    .map((ex) => ({
-      name: sanitizeExerciseName(ex?.name),
-      weight: sanitizeNumber(ex?.weight, 1000),
-      reps: sanitizeNumber(ex?.reps, 1000),
-      sets: sanitizeNumber(ex?.sets, 100),
-    }))
+    .map((ex) => {
+      const name = sanitizeExerciseName((ex as { name?: unknown })?.name);
+      // 新形式
+      if (Array.isArray((ex as { setGroups?: unknown[] }).setGroups)) {
+        const groups = (ex as { setGroups: unknown[] }).setGroups
+          .slice(0, 30) // 1種目あたり最大30グループまで
+          .map(sanitizeSetGroup)
+          .filter((g) => g.weight !== null || g.reps !== null || g.sets !== null);
+        return { name, setGroups: groups };
+      }
+      // 旧形式 → 1グループに変換
+      const legacy = ex as { weight?: unknown; reps?: unknown; sets?: unknown };
+      const group = sanitizeSetGroup(legacy);
+      const hasValue = group.weight !== null || group.reps !== null || group.sets !== null;
+      return { name, setGroups: hasValue ? [group] : [] };
+    })
     .filter((ex) => ex.name.length > 0);
 
   if (sanitized.length === 0) {
@@ -141,7 +227,7 @@ export async function getWorkoutsByMonth(
     .orderBy("date", "desc")
     .get();
 
-  return snapshot.docs.map((doc) => doc.data() as WorkoutRecord);
+  return snapshot.docs.map((doc) => normalizeWorkoutRecord(doc.data() as WorkoutRecord));
 }
 
 export async function getTotalWorkoutCount(userId: string): Promise<number> {
@@ -166,7 +252,7 @@ export async function getRecentWorkouts(
     .limit(limit)
     .get();
 
-  return snapshot.docs.map((doc) => doc.data() as WorkoutRecord);
+  return snapshot.docs.map((doc) => normalizeWorkoutRecord(doc.data() as WorkoutRecord));
 }
 
 export function formatWorkoutHistory(workouts: WorkoutRecord[]): string {
@@ -181,14 +267,41 @@ export function formatWorkoutHistory(workouts: WorkoutRecord[]): string {
       const dateStr = `${jst.getMonth() + 1}/${jst.getDate()}`;
       const exercises = w.exercises
         .map((e) => {
-          const parts = [e.name];
-          if (e.weight) parts.push(`${e.weight}kg`);
-          if (e.reps) parts.push(`${e.reps}回`);
-          if (e.sets) parts.push(`${e.sets}セット`);
-          return `  ${parts.join(" ")}`;
+          const lines = [`  ${e.name}`];
+          (e.setGroups ?? []).forEach((g) => {
+            const parts: string[] = [];
+            if (g.weight) parts.push(`${g.weight}kg`);
+            if (g.reps) parts.push(`${g.reps}回`);
+            if (g.sets) parts.push(`${g.sets}セット`);
+            if (parts.length) lines.push(`    ${parts.join(" ")}`);
+          });
+          return lines.join("\n");
         })
         .join("\n");
       return `[${dateStr}]\n${exercises}`;
     })
     .join("\n\n");
+}
+
+// 直近のワークアウトから、ユーザー独自に手入力した種目名（重複排除）を取得
+export async function getRecentCustomExerciseNames(
+  userId: string,
+  limit = 6,
+  excludeSet: Set<string> = new Set()
+): Promise<string[]> {
+  const workouts = await getRecentWorkouts(userId, 50);
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const w of workouts) {
+    for (const ex of w.exercises) {
+      const name = ex.name?.trim();
+      if (!name) continue;
+      if (seen.has(name)) continue;
+      if (excludeSet.has(name)) continue;
+      seen.add(name);
+      result.push(name);
+      if (result.length >= limit) return result;
+    }
+  }
+  return result;
 }

@@ -7,7 +7,6 @@ import { getRecentWorkouts, formatWorkoutHistory } from "../workout/recorder";
 import { generateWeeklyMenu, getTodayMenu } from "../workout/menuGenerator";
 import { replyMessages, pushMessages, createMenuFlexMessage } from "./messages";
 import { startRecordingFlow, handleRecordingStep } from "./recordingFlow";
-import { startOnboarding, handleOnboardingStep, isInOnboarding } from "./onboardingFlow";
 import { getTrainer } from "./trainerCharacter";
 
 function getChannelSecret(): string {
@@ -66,12 +65,22 @@ function buildMsg(text: string, sender: { name: string }): line.messagingApi.Mes
 async function handleEvent(event: line.WebhookEvent): Promise<void> {
   console.log(`[handleEvent] type=${event.type}, source=${JSON.stringify(event.source)}`);
 
-  // フォロー時: オンボーディング開始
+  // フォロー時: シンプルな歓迎メッセージ + LIFFへ誘導（旧オンボーディングのボタンフローは廃止）
   if (event.type === "follow") {
     const userId = event.source.userId;
     if (!userId) return;
     await getOrCreateUser(userId);
-    await startOnboarding(userId, event.replyToken);
+    const trainer = getTrainer("hot");
+    const welcome: line.messagingApi.TextMessage = {
+      type: "text",
+      text:
+        `${trainer.name}だ。マッスルコーチAIへようこそ！💪\n\n` +
+        `下のメニューから「設定」を開いて、まずはプロフィールを登録してくれ。\n` +
+        `目標やレベルを教えてくれれば、君専用のアドバイスができるからな。\n\n` +
+        `準備ができたら、いつでも俺に話しかけてくれ。`,
+      sender: { name: trainer.name },
+    };
+    await replyMessages(event.replyToken, [welcome]);
     return;
   }
 
@@ -84,20 +93,9 @@ async function handleEvent(event: line.WebhookEvent): Promise<void> {
   const replyToken = event.replyToken;
   const user = await getOrCreateUser(userId);
 
-  // オンボーディング中
-  const inOnboarding = await isInOnboarding(userId);
-  if (inOnboarding) {
-    await handleOnboardingStep(userId, replyToken, text);
-    return;
-  }
-
-  // プロフィール未設定（既存ユーザーのフォールバック）
-  if (!user.profile.trainerType) {
-    await startOnboarding(userId, replyToken);
-    return;
-  }
-
-  const trainer = getTrainer(user.profile.trainerType);
+  // trainerType未設定なら hot をデフォルトとして扱う（旧フォールバックの再オンボーディングは廃止）
+  const effectiveTrainerType = user.profile.trainerType || "hot";
+  const trainer = getTrainer(effectiveTrainerType);
   const sender = { name: user.profile.trainerName || trainer.name };
   const command = text.toLowerCase();
 

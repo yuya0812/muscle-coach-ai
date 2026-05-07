@@ -38,7 +38,18 @@ export interface UserData {
   settings: {
     notificationEnabled: boolean;
     notificationTime: string;
+    notificationDays?: number[]; // 0=日, 1=月, ..., 6=土。空配列=曜日指定なし
+    autoSendAnalysisEnabled?: boolean;
+    autoSendAnalysisMessage?: string;
   };
+}
+
+export interface UserSettingsUpdate {
+  notificationEnabled?: boolean;
+  notificationTime?: string;
+  notificationDays?: number[];
+  autoSendAnalysisEnabled?: boolean;
+  autoSendAnalysisMessage?: string;
 }
 
 export async function getOrCreateUser(lineUserId: string, displayName?: string): Promise<UserData> {
@@ -58,6 +69,8 @@ export async function getOrCreateUser(lineUserId: string, displayName?: string):
       equipment: "",
       frequency: 3,
       createdAt: admin.firestore.Timestamp.now(),
+      // LIFF Profile画面で変更可能。LINE側オンボーディングを廃止したのでデフォルト trainerType を設定
+      trainerType: "hot",
     },
     subscription: {
       status: "free",
@@ -73,6 +86,9 @@ export async function getOrCreateUser(lineUserId: string, displayName?: string):
     settings: {
       notificationEnabled: false,
       notificationTime: "09:00",
+      notificationDays: [],
+      autoSendAnalysisEnabled: false,
+      autoSendAnalysisMessage: "今日の記録を分析して",
     },
   };
 
@@ -88,6 +104,19 @@ export async function updateUserProfile(
   for (const [key, value] of Object.entries(profile)) {
     updates[`profile.${key}`] = value;
   }
+  await db().collection("users").doc(lineUserId).update(updates);
+}
+
+export async function updateUserSettings(
+  lineUserId: string,
+  settings: UserSettingsUpdate
+): Promise<void> {
+  const updates: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(settings)) {
+    if (value === undefined) continue;
+    updates[`settings.${key}`] = value;
+  }
+  if (Object.keys(updates).length === 0) return;
   await db().collection("users").doc(lineUserId).update(updates);
 }
 

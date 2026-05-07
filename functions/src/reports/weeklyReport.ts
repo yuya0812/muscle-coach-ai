@@ -3,13 +3,7 @@ import * as admin from "firebase-admin";
 import { getAnthropicClient, CLAUDE_MODEL } from "../ai/client";
 import { pushText } from "../line/messages";
 import { WEEKLY_REPORT_PROMPT } from "../ai/prompts";
-
-interface WorkoutExercise {
-  name: string;
-  weight: number | null;
-  reps: number | null;
-  sets: number | null;
-}
+import { normalizeExercise, Exercise } from "../workout/recorder";
 
 /**
  * 毎週月曜日 8:00 JSTにプレミアムユーザーへ週次レポートを送信
@@ -75,7 +69,7 @@ export async function sendWeeklyReportToUser(userId: string): Promise<void> {
       date: jst
         ? `${jst.getMonth() + 1}/${jst.getDate()}`
         : "不明",
-      exercises: (data.exercises || []) as WorkoutExercise[],
+      exercises: ((data.exercises || []) as Exercise[]).map((ex) => normalizeExercise(ex)),
     };
   });
 
@@ -84,9 +78,13 @@ export async function sendWeeklyReportToUser(userId: string): Promise<void> {
       const exList = w.exercises
         .map((e) => {
           const parts = [e.name];
-          if (e.weight) parts.push(`${e.weight}kg`);
-          if (e.reps) parts.push(`${e.reps}回`);
-          if (e.sets) parts.push(`${e.sets}セット`);
+          (e.setGroups ?? []).forEach((g) => {
+            const setParts: string[] = [];
+            if (g.weight) setParts.push(`${g.weight}kg`);
+            if (g.reps) setParts.push(`${g.reps}回`);
+            if (g.sets) setParts.push(`${g.sets}セット`);
+            if (setParts.length) parts.push(`(${setParts.join(" ")})`);
+          });
           return parts.join(" ");
         })
         .join(", ");

@@ -387,18 +387,23 @@ async function handleSets(
 
   const exercise: Exercise = {
     name: state.exercise!,
-    weight: state.weight ?? null,
-    reps: state.reps ?? null,
-    sets,
+    setGroups: [
+      {
+        weight: state.weight ?? null,
+        reps: state.reps ?? null,
+        sets,
+      },
+    ],
   };
 
   await saveWorkoutDirectly(userId, [exercise]);
   await clearRecordingState(userId);
 
+  const g = exercise.setGroups[0];
   const parts = [exercise.name];
-  if (exercise.weight) parts.push(`${exercise.weight}kg`);
-  if (exercise.reps) parts.push(`${exercise.reps}回`);
-  if (exercise.sets) parts.push(`${exercise.sets}セット`);
+  if (g.weight) parts.push(`${g.weight}kg`);
+  if (g.reps) parts.push(`${g.reps}回`);
+  if (g.sets) parts.push(`${g.sets}セット`);
   const summary = parts.join(" ");
 
   const trainerName = await getTrainerName(userId);
