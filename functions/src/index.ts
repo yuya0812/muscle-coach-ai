@@ -2,7 +2,7 @@ import * as admin from "firebase-admin";
 import { onRequest } from "firebase-functions/v2/https";
 import { lineWebhook } from "./line/webhook";
 import { stripeWebhook, createCheckoutSession, createCustomerPortalSession } from "./subscription/stripe";
-import { getOrCreateUser, updateUserProfile, getRemainingUsage, updateUserSettings } from "./user/manager";
+import { getOrCreateUser, updateUserProfile, getRemainingUsage, updateUserSettings, TERMS_CURRENT_VERSION } from "./user/manager";
 import {
   getRecentWorkouts,
   getWorkoutsByMonth,
@@ -180,6 +180,10 @@ export const api = onRequest(
             targetBodyFatPercent: user.profile.targetBodyFatPercent,
             setupCompleted: !!user.profile.setupCompleted,
           },
+          legal: {
+            currentTermsVersion: TERMS_CURRENT_VERSION,
+            acceptedTermsVersion: user.profile.termsAcceptedVersion ?? null,
+          },
           settings: {
             notificationEnabled: user.settings.notificationEnabled,
             notificationTime: user.settings.notificationTime,
@@ -265,6 +269,11 @@ export const api = onRequest(
         }
         if (body.setupCompleted !== undefined) {
           updates.setupCompleted = !!body.setupCompleted;
+        }
+        // 利用規約への同意（現行版を承認した記録）
+        if (body.acceptTerms === true) {
+          updates.termsAcceptedVersion = TERMS_CURRENT_VERSION;
+          updates.termsAcceptedAt = admin.firestore.Timestamp.now();
         }
 
         if (Object.keys(updates).length === 0) {

@@ -59,6 +59,10 @@ export interface ProfileData {
     targetBodyFatPercent?: number | null
     setupCompleted?: boolean
   }
+  legal?: {
+    currentTermsVersion: string
+    acceptedTermsVersion: string | null
+  }
   settings: {
     notificationEnabled: boolean
     notificationTime: string
@@ -90,6 +94,7 @@ export interface ProfileUpdateInput {
   targetWeightKg?: number | null
   targetBodyFatPercent?: number | null
   setupCompleted?: boolean
+  acceptTerms?: boolean
 }
 
 export async function updateProfile(userId: string, profile: ProfileUpdateInput): Promise<void> {

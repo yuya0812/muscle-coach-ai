@@ -4,6 +4,7 @@ import { initLiff, getLiffUser, type LiffUser } from './liff'
 import Header from './components/Header'
 import BottomNav from './components/BottomNav'
 import Loading from './components/Loading'
+import TermsGate from './components/TermsGate'
 import Dashboard from './pages/Dashboard'
 import Subscribe from './pages/Subscribe'
 import Profile from './pages/Profile'
@@ -68,22 +69,24 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <TourProvider>
-        <Header />
-        <TourBootstrap userId={user.userId} />
-        <Routes>
-          <Route path="/onboarding" element={<Onboarding userId={user.userId} />} />
-          <Route path="/setup" element={<Setup userId={user.userId} />} />
-          <Route path="/dashboard" element={<Dashboard userId={user.userId} />} />
-          <Route path="/subscribe" element={<Subscribe userId={user.userId} />} />
-          <Route path="/profile" element={<Profile userId={user.userId} />} />
-          <Route path="/workout-input" element={<WorkoutInput userId={user.userId} />} />
-          <Route path="/workout-log" element={<WorkoutLog userId={user.userId} />} />
-          <Route path="*" element={<Navigate to={isOnboarded ? '/dashboard' : '/onboarding'} replace />} />
-        </Routes>
-        <BottomNav />
-        <TourOverlay />
-      </TourProvider>
+      <TermsGate userId={user.userId}>
+        <TourProvider>
+          <Header />
+          <TourBootstrap userId={user.userId} />
+          <Routes>
+            <Route path="/onboarding" element={<Onboarding userId={user.userId} />} />
+            <Route path="/setup" element={<Setup userId={user.userId} />} />
+            <Route path="/dashboard" element={<Dashboard userId={user.userId} />} />
+            <Route path="/subscribe" element={<Subscribe userId={user.userId} />} />
+            <Route path="/profile" element={<Profile userId={user.userId} />} />
+            <Route path="/workout-input" element={<WorkoutInput userId={user.userId} />} />
+            <Route path="/workout-log" element={<WorkoutLog userId={user.userId} />} />
+            <Route path="*" element={<Navigate to={isOnboarded ? '/dashboard' : '/onboarding'} replace />} />
+          </Routes>
+          <BottomNav />
+          <TourOverlay />
+        </TourProvider>
+      </TermsGate>
     </BrowserRouter>
   )
 }

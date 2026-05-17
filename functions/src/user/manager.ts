@@ -6,6 +6,10 @@ const FREE_DAILY_LIMIT = 3;
 const PREMIUM_DAILY_LIMIT = 100;
 const COOLDOWN_MS = 3000;
 
+// 利用規約・プライバシーポリシーの現行バージョン。
+// 規約を改訂するたびに日付を更新すると、全ユーザーが起動時に再同意モーダルを見ることになる。
+export const TERMS_CURRENT_VERSION = "2026-05-12";
+
 export type UsageDeniedReason = "limit" | "cooldown";
 
 export interface UserProfile {
@@ -31,6 +35,9 @@ export interface UserProfile {
   targetWeightKg?: number;
   targetBodyFatPercent?: number;
   setupCompleted?: boolean;
+  // 利用規約への同意バージョン。null/undefined または現行版と一致しない場合は再同意が必要
+  termsAcceptedVersion?: string | null;
+  termsAcceptedAt?: FirebaseFirestore.Timestamp;
 }
 
 export interface UserData {
