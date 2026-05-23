@@ -165,6 +165,12 @@ firebase deploy --only firestore:rules
 ### 🟡 Anthropic APIクレジット切れで全AI機能停止する
 クレジット枯渇すると AI会話・マイルストーン・週次レポート・X自動投稿が全部止まる。`credit balance is too low` エラーがログに出たら即課金。
 
+### 🔴 X API は Pay-per-use 課金。URL含む投稿は単価13倍
+新規アカウントは Free / Basic / Pro tier に申し込めず Pay-per-use 一択（2026/02〜）。
+URLなし $0.015/件・URL含む $0.20/件 で、本プロジェクトは**本文/CTAいずれもURL不掲載**でプロフィール誘導する方針。
+[autoPost.ts](functions/src/x/autoPost.ts) の `stripUrls()` がモデルの逸脱を投稿前に除去する保険。これを外すと月コストが跳ねるので注意。
+クレジットは X Developer Portal で事前チャージ。残高はそこで監視する。
+
 ### 🟡 LIFF SDK は HTTPSドメインでのみ動作
 ローカル開発時は `liff-app` を `npm run dev` した URL を LIFF Endpoint に登録するか、LIFF Inspector を使う。
 
@@ -175,7 +181,6 @@ firebase deploy --only firestore:rules
 
 ## コミット・PR運用
 
-- 現状 git は初期化されているがコミット0件。本番フェーズに入る前に initial commit + GitHub 紐付けを実施する。
 - コミットメッセージは Conventional Commits（`feat:` / `fix:` / `chore:` / `docs:` 等）。
 - mainブランチへの直接pushは原則禁止。PR経由で確認する。
 

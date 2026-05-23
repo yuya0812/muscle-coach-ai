@@ -119,6 +119,7 @@ X_ACCESS_TOKEN_SECRET
 | `api` | HTTP | - | LIFFアプリ用REST API |
 | `stripeWebhook` | HTTP | - | Stripe Webhook |
 | `autoPostMorning` | Scheduler | 毎日 7:00 | X自動投稿（朝） |
+| `autoPostNoon` | Scheduler | 毎日 12:00 | X自動投稿（昼・ランチ層向け） |
 | `autoPostEvening` | Scheduler | 毎日 20:00 | X自動投稿（夜） |
 | `sendScheduledNotifications` | Scheduler | 毎時 0分 | LINEプッシュ通知 |
 | `sendWeeklyReports` | Scheduler | 毎週月曜 8:00 | 週次レポート |
@@ -161,22 +162,44 @@ https://lin.ee/YjZDGe5
 | 金 | 花金トレーニング・週末モチベーション |
 | 土 | 追い込み・週次振り返り |
 
-**A/Bテスト（LINE URL挿入頻度）:**
-| 週 | CTA方針 |
-|---|---|
-| 奇数週 | 全投稿にLINE URLを含める |
-| 偶数週 | 月・金の夜投稿のみLINE URLあり（週2回） |
+**投稿頻度:** 1日3投稿（朝7:00 / 昼12:00 / 夜20:00）× 30日 = 90投稿/月
 
-数週間後にFirestoreの `xPostLogs` と LINE友達追加数を比較して効果の高い方に固定する。
+**A/Bテスト（CTA文言バリアント）:**
+
+X API Pay-per-use ではURL含む投稿が $0.20/件と高額（URLなしは $0.015〜$0.02/件）。
+**本文・CTAいずれもURLは含めず、プロフィール固定リンクへ誘導する方針。**
+文言だけ強弱で振り、どちらが効くかを `xPostLogs.ctaVariant` で集計する。
+
+| 週 | CTAバリアント | 内容 |
+|---|---|---|
+| 奇数週 | `directProfile` | 本文の末尾に「プロフのリンクから〜」のCTA行を追加（URLなし） |
+| 偶数週 | `softProfile` | CTAなし。本編で完結する自然な発信（対照群） |
+
+数週間後にFirestoreの `xPostLogs` と LINE友達追加数を突き合わせて、CTAの効果を判定する。
 
 **投稿ログ保存先:** Firestore `xPostLogs/{tweetId}`
 ```
-{ tweetId, tweetText, weekNum, withCta, timing, postedAt }
+{ tweetId, tweetText, weekNum, ctaVariant, timing, postedAt }
 ```
+- `ctaVariant`: `"directProfile" | "softProfile"`
+- `timing`: `"morning" | "noon" | "evening"`
 
-### X API Tier
-**Free tier**（月1,500投稿上限）。1日2投稿×30日=60投稿で余裕あり。
-キーワード検索・自動リプライは未使用（Basic tier $100/月が必要）。
+**URL混入の保険:** [autoPost.ts](functions/src/x/autoPost.ts) の `stripUrls()` が、モデルが指示を無視してURLを出力した場合に投稿前に除去する。URL課金 $0.20/件を確実に回避するためのガード。
+
+### X API 課金体系（2026年5月時点）
+
+**Pay-per-use（従量課金）**。新規ユーザーは Free / Basic / Pro tier に直接申し込めず、これ一択。
+クレジット先払い、Developer Portal で事前チャージしてリクエストごとに消費。
+
+| 操作 | 公称単価 | 実測 |
+|---|---|---|
+| テキスト投稿（URLなし） | $0.015 | 約 $0.02/件（owned reads等が乗っているとみられる） |
+| 投稿（URL含む） | $0.20 | 本プロジェクトでは使わない |
+| 投稿の読み取り | $0.005 | 未使用 |
+
+**月コスト試算:** 90投稿 × $0.02 = **約$1.80/月**。$5 チャージで約2.8ヶ月もつ計算。
+
+キーワード検索・自動リプライ・タイムライン取得は未使用。
 
 ### 運用ルール
 
@@ -268,7 +291,7 @@ cd functions && npm run build && cd .. && firebase deploy --only functions
 cd liff-app && npm run build && cd .. && firebase deploy --only hosting
 
 # 特定Functionのみ
-firebase deploy --only functions:autoPostMorning,functions:autoPostEvening
+firebase deploy --only functions:autoPostMorning,functions:autoPostNoon,functions:autoPostEvening
 ```
 
 ---
