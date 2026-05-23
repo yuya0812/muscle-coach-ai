@@ -3,11 +3,15 @@ import * as line from "@line/bot-sdk";
 import { getTrainerResponse, classifyIntent } from "../ai/trainer";
 import { formatGreeting } from "../ai/formatter";
 import { getOrCreateUser, incrementUsage, getRemainingUsage } from "../user/manager";
-import { getRecentWorkouts, formatWorkoutHistory } from "../workout/recorder";
+import { getRecentWorkouts, formatWorkoutHistory, parseAndSaveWorkout } from "../workout/recorder";
 import { generateWeeklyMenu, getTodayMenu } from "../workout/menuGenerator";
 import { replyMessages, pushMessages, createMenuFlexMessage } from "./messages";
-import { startRecordingFlow, handleRecordingStep } from "./recordingFlow";
+import { startRecordingFlow, handleRecordingStep, checkAndPushMilestone } from "./recordingFlow";
 import { getTrainer } from "./trainerCharacter";
+
+// 「今日のメニュー」を聞く自然文を検出するパターン。
+// 「今日」+ 「メニュー / 何やる / 何する / トレーニング」あたりが含まれていれば今日分メニュー要求とみなす。
+const TODAY_MENU_QUERY = /今日.*(メニュー|何|なに|トレ|やる|やれ|する|すれ)|(メニュー|トレ).*今日/;
 
 function getChannelSecret(): string {
   const secret = process.env.LINE_CHANNEL_SECRET;
@@ -104,9 +108,15 @@ async function handleEvent(event: line.WebhookEvent): Promise<void> {
     return;
   }
 
-  if (command === "今日のメニュー" || command === "今日") {
+  // 完全一致 + 自然文の「今日のメニュー」要求を同じ経路に乗せる。
+  // 「今日のメニュー教えて」「今日は何やる？」「今日のトレーニングは？」等を拾う。
+  if (
+    command === "今日のメニュー" ||
+    command === "今日" ||
+    TODAY_MENU_QUERY.test(text)
+  ) {
     const menu = await getTodayMenu(userId);
-    await replyMessages(replyToken, [buildMsg("メニューを送るね！", sender)]);
+    await replyMessages(replyToken, [buildMsg("今日のメニューを送ります。", sender)]);
     await pushMessages(userId, [buildMsg(menu, sender)]);
     return;
   }
@@ -177,6 +187,27 @@ async function handleEvent(event: line.WebhookEvent): Promise<void> {
   if (intent === "greeting") {
     const greetingMsg = formatGreeting(user.profile.name || "ゲスト");
     await replyMessages(replyToken, [buildMsg(greetingMsg, sender)]);
+    return;
+  }
+
+  // 記録意図：自然文（例「腹筋10回×3セット」）を直接パースして Firestore に保存する。
+  // ここを AI 会話経路に流すと「腹筋についての一般論」が返るだけで記録は1件も残らないため、
+  // 必ずパース → 保存 → サマリー返却 → マイルストーンチェックの順に処理する。
+  if (intent === "record") {
+    await replyMessages(replyToken, [buildMsg("記録を読み取っています。", sender)]);
+    try {
+      const result = await parseAndSaveWorkout(userId, text);
+      await pushMessages(userId, [buildMsg(result.message, sender)]);
+      // 記録が1件以上保存できた場合のみマイルストーン判定（5/15/30回到達時にレポート push）
+      if (result.exercises.length > 0) {
+        await checkAndPushMilestone(userId);
+      }
+    } catch (error) {
+      console.error("[Record intent] parseAndSaveWorkout error:", error);
+      await pushMessages(userId, [
+        buildMsg("記録の保存に失敗しました。もう一度お試しください。", sender),
+      ]);
+    }
     return;
   }
 
