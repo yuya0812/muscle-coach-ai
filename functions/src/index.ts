@@ -16,7 +16,7 @@ import {
 import { authenticateRequest } from "./auth/verifyLiffToken";
 import { sendWeeklyReports } from "./reports/weeklyReport";
 import { sendScheduledNotifications } from "./notifications/scheduledNotifications";
-import { autoPostMorning, autoPostEvening } from "./x/autoPost";
+import { autoPostMorning, autoPostNoon, autoPostEvening } from "./x/autoPost";
 import { createAndSetDefaultRichMenu } from "./line/richMenu";
 import { checkAndPushMilestone } from "./line/recordingFlow";
 
@@ -28,7 +28,7 @@ export { lineWebhook };
 export { stripeWebhook };
 export { sendWeeklyReports };
 export { sendScheduledNotifications };
-export { autoPostMorning, autoPostEvening };
+export { autoPostMorning, autoPostNoon, autoPostEvening };
 
 // CORS設定: LIFFアプリのオリジンのみ許可
 const ALLOWED_ORIGINS = [
