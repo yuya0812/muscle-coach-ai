@@ -8,11 +8,17 @@ import * as admin from "firebase-admin";
 import Anthropic from "@anthropic-ai/sdk";
 import { buildUserContextBlock } from "../user/metrics";
 import type { UserProfile } from "../user/manager";
+import {
+  buildWorkoutHistorySummary,
+  formatWorkoutHistoryForPrompt,
+  type WorkoutHistorySummary,
+} from "../workout/history";
 
 const db = admin.firestore;
 
 const MAX_HISTORY_MESSAGES = 10;
 const MAX_CONTEXT_CHARS = 4000; // コンテキストの最大文字数（トークン節約）
+const WORKOUT_HISTORY_LIMIT = 30; // 履歴サマリーで集計する直近セッション数
 
 export interface ConversationMessage {
   role: "user" | "assistant";
@@ -22,7 +28,14 @@ export interface ConversationMessage {
 
 export interface ConversationContext {
   messages: Anthropic.MessageParam[];
+  /**
+   * AI の system prompt に追記するコンテキスト本体。
+   * ユーザー情報（プロフィール・派生メトリクス）と直近のトレーニング履歴サマリーを連結したもの。
+   * 過去30セッションの種目別最大重量・典型レップ・触れていない部位などが含まれる。
+   */
   userProfileContext: string;
+  /** 履歴サマリー本体。記録の有無や具体的な数値を呼び出し元で参照するため。 */
+  workoutSummary: WorkoutHistorySummary;
 }
 
 /**
@@ -113,14 +126,15 @@ export async function buildConversationContext(
   userId: string,
   currentMessage: string
 ): Promise<ConversationContext> {
-  // 並列でプロフィールと履歴を取得
-  const [profile, history] = await Promise.all([
+  // 並列でプロフィール・会話履歴・ワークアウト履歴サマリーを取得
+  const [profile, conversation, workoutSummary] = await Promise.all([
     getUserProfile(userId),
     getConversationHistory(userId),
+    buildWorkoutHistorySummary(userId, WORKOUT_HISTORY_LIMIT),
   ]);
 
-  // 文字数制限を適用
-  const trimmedHistory = trimMessages(history);
+  // 会話履歴は文字数制限を適用
+  const trimmedHistory = trimMessages(conversation);
 
   // Anthropic APIのメッセージ形式に変換
   const messages: Anthropic.MessageParam[] = trimmedHistory.map((msg) => ({
@@ -131,8 +145,11 @@ export async function buildConversationContext(
   // 現在のメッセージを追加
   messages.push({ role: "user", content: currentMessage });
 
-  // ユーザープロフィールコンテキストを構築（年代・身体スペック・派生メトリクス含む）
-  const userProfileContext = profile ? buildUserContextBlock(profile) : "";
+  // ユーザープロフィール（年代・身体スペック・派生メトリクス）+ ワークアウト履歴サマリー
+  // この組み合わせを「専属トレーナーが毎回参照する一人分の資料」として system prompt に渡す
+  const profileBlock = profile ? buildUserContextBlock(profile) : "";
+  const workoutBlock = formatWorkoutHistoryForPrompt(workoutSummary);
+  const userProfileContext = [profileBlock, workoutBlock].filter((s) => s.length > 0).join("\n");
 
-  return { messages, userProfileContext };
+  return { messages, userProfileContext, workoutSummary };
 }

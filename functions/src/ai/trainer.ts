@@ -3,15 +3,13 @@
  * 意図分類・コンテキスト構築・AI呼び出し・レスポンス整形を統合する
  */
 
-import * as admin from "firebase-admin";
 import {
   TRAINER_SYSTEM_PROMPT,
-  MENU_GENERATION_PROMPT,
   FORM_GUIDE_PROMPT,
   PROGRESS_ANALYSIS_PROMPT,
   NUTRITION_ADVICE_PROMPT,
 } from "./prompts";
-import { getAnthropicClient, getAIJsonResponse, CLAUDE_MODEL } from "./client";
+import { getAnthropicClient, CLAUDE_MODEL } from "./client";
 import {
   buildConversationContext,
   saveConversationMessage,
@@ -19,7 +17,6 @@ import {
 import { classifyIntent, Intent } from "./intentClassifier";
 import {
   formatForLine,
-  formatMenuForLine,
   formatGreeting,
   formatErrorMessage,
 } from "./formatter";
@@ -60,7 +57,7 @@ export async function getTrainerResponse(
       );
 
     case "progress":
-      return handleProgressInquiry(userId);
+      return handleProgressInquiry(userId, userMessage);
 
     case "nutrition":
       return handleNutritionAdvice(userId, userMessage);
@@ -86,37 +83,31 @@ async function handleRecordIntent(
 }
 
 /**
- * メニュー生成リクエストを処理
+ * メニュー生成リクエストを処理。
+ * 履歴ベースで個別最適化したメニューを生成するため menuGenerator に委譲する。
  */
 async function handleMenuRequest(
   userId: string,
   userMessage: string
 ): Promise<string[]> {
   try {
-    const context = await buildConversationContext(userId, userMessage);
+    // 動的importで循環参照を避ける（workout/menuGenerator → ai/formatter → 既存トレーナー側、の流れ）
+    const { generateWeeklyMenu } = await import("../workout/menuGenerator");
+    const formatted = await generateWeeklyMenu(userId);
 
-    const menuPrompt = context.userProfileContext
-      ? `${MENU_GENERATION_PROMPT}\n\n## ユーザー情報\n${context.userProfileContext}`
-      : MENU_GENERATION_PROMPT;
-
-    const jsonStr = await getAIJsonResponse(menuPrompt, userMessage);
-    const menuData = JSON.parse(jsonStr);
-
-    // 会話履歴に保存
     await saveConversationMessage(userId, "user", userMessage);
-
-    const formatted = formatMenuForLine(menuData);
     await saveConversationMessage(userId, "assistant", formatted);
 
     return formatForLine(formatted);
   } catch {
-    // JSONパースに失敗した場合は一般会話にフォールバック
     return handleGeneralConversation(userId, userMessage);
   }
 }
 
 /**
- * フォーム指導リクエストを処理
+ * フォーム指導リクエストを処理。
+ * プロフィール・履歴サマリーを system prompt に注入することで、
+ * 「あなたが普段やっている重量」「最近どの部位を触っているか」を踏まえたフォーム助言を返せるようにする。
  */
 async function handleFormQuestion(
   userId: string,
@@ -124,10 +115,12 @@ async function handleFormQuestion(
   exerciseName: string | null
 ): Promise<string[]> {
   const client = getAnthropicClient();
+  const context = await buildConversationContext(userId, userMessage);
 
-  const systemPrompt = exerciseName
-    ? `${FORM_GUIDE_PROMPT}\n\n## 対象種目\n${exerciseName}`
-    : FORM_GUIDE_PROMPT;
+  const parts: string[] = [FORM_GUIDE_PROMPT];
+  if (context.userProfileContext) parts.push(context.userProfileContext);
+  if (exerciseName) parts.push(`## 対象種目\n${exerciseName}`);
+  const systemPrompt = parts.join("\n\n");
 
   await saveConversationMessage(userId, "user", userMessage);
 
@@ -149,44 +142,32 @@ async function handleFormQuestion(
 }
 
 /**
- * 進捗分析リクエストを処理
+ * 進捗分析リクエストを処理。
+ * ユーザーの実際の文面（種目指定や期間指定を含むことが多い）を Claude に渡す。
+ * 履歴の有無は WorkoutHistorySummary.hasRecords で判定する（文字列マッチは脆いため避ける）。
  */
-async function handleProgressInquiry(userId: string): Promise<string[]> {
-  // Firestoreからワークアウト履歴を取得
-  const snapshot = await admin.firestore()
-    .collection("users")
-    .doc(userId)
-    .collection("workouts")
-    .orderBy("date", "desc")
-    .limit(20)
-    .get();
+async function handleProgressInquiry(
+  userId: string,
+  userMessage: string
+): Promise<string[]> {
+  const context = await buildConversationContext(userId, userMessage);
 
-  if (snapshot.empty) {
+  if (!context.workoutSummary.hasRecords) {
     return [
-      "まだトレーニング記録がありません 📝\n\n「ベンチプレス 60kg 10回 3セット」\nのように記録を入力してみましょう！",
+      "まだトレーニング記録がありません。\n「ベンチプレス 60kg 10回 3セット」のように記録を入力してみましょう。",
     ];
   }
 
-  const workouts = snapshot.docs.map((doc) => {
-    const data = doc.data();
-    return {
-      date: data.date?.toDate?.()?.toISOString?.() || "不明",
-      exercises: data.exercises || [],
-    };
-  });
-
-  const historyText = JSON.stringify(workouts, null, 2);
   const client = getAnthropicClient();
+  const systemPrompt = `${PROGRESS_ANALYSIS_PROMPT}\n\n${context.userProfileContext}`;
 
-  const systemPrompt = `${PROGRESS_ANALYSIS_PROMPT}\n\n## ワークアウト履歴\n${historyText}`;
+  await saveConversationMessage(userId, "user", userMessage);
 
   const response = await client.messages.create({
     model: CLAUDE_MODEL,
     max_tokens: 1024,
     system: systemPrompt,
-    messages: [
-      { role: "user", content: "最近のトレーニングの進捗を教えて" },
-    ],
+    messages: [{ role: "user", content: userMessage }],
   });
 
   const assistantMessage =
