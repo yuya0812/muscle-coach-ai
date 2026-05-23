@@ -40,11 +40,30 @@ export async function getAIJsonResponse(
   const text =
     response.content[0].type === "text" ? response.content[0].text : "{}";
 
-  // JSONブロック内のテキストを抽出（```json ... ``` 形式の場合）
-  const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/);
-  if (jsonMatch) {
-    return jsonMatch[1];
+  return extractJson(text);
+}
+
+/**
+ * Claude のレスポンスから JSON 本体を取り出す防御層。
+ *
+ * 想定ケース:
+ *   1. 生 JSON のみ → そのまま返す
+ *   2. ```json ... ``` で囲まれている → 中身を返す
+ *   3. 前置きの説明文 + JSON → 最初の { から最後の } までを切り出して返す
+ *
+ * いずれにもマッチしなければ trim だけ返す（呼び出し元で JSON.parse 失敗時に詳細ログを出す）。
+ */
+function extractJson(text: string): string {
+  const trimmed = text.trim();
+
+  const fenceMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+  if (fenceMatch) return fenceMatch[1].trim();
+
+  const firstBrace = trimmed.indexOf("{");
+  const lastBrace = trimmed.lastIndexOf("}");
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    return trimmed.slice(firstBrace, lastBrace + 1);
   }
 
-  return text.trim();
+  return trimmed;
 }
