@@ -46,15 +46,7 @@
 
 ## 🔴 すぐやる（次セッションの起点）
 
-### 1. UIリデザインの棚卸し
-[design_handoff_ui_redesign/](design_handoff_ui_redesign/) の12ファイル差し替え指示に対して、
-どこまで進んでいるか / 残タスクは何かを洗い出してから着手判断する。
-
-- [ ] design_handoff_ui_redesign/ の内容を読む
-- [ ] 既に反映済みのファイルと未反映のファイルを git ログから特定
-- [ ] 残タスクを NEXT_TASKS.md に書き戻す
-
-### 2. TESTING_CHECKLIST の通し動作確認
+### TESTING_CHECKLIST の通し動作確認
 [TESTING_CHECKLIST.md](TESTING_CHECKLIST.md) の項目を順に実行。Anthropicクレジットは追加済みなので全AI機能が動くはず。
 
 - [ ] LINEで「おはよう」→ 即座に挨拶返答
@@ -102,12 +94,18 @@
 
 ---
 
-## 🟢 UIリデザイン（進行中？要確認）
+## UIリデザイン（完了）
 
-[design_handoff_ui_redesign/](design_handoff_ui_redesign/) に12ファイル差し替え指示あり。
-- [ ] どこまで進んでいるか棚卸し
-- [ ] 残タスクを洗い出し
-- [ ] 完了後 TESTING_CHECKLIST の動作確認を再度通す
+[design_handoff_ui_redesign/](design_handoff_ui_redesign/) の12ファイル差し替え指示は
+リデザイン本体が `0079f73 feat(frontend): LIFF app with dark UI, milestone tracking, product tour`
+の段階で取り込まれて以降、`f3a9bac` `325ff6b` `d7854da` `959ed57` で発展している。
+2026-05-23 時点で実装が仕様を上回っているため、これ以上の対応は不要。
+- [x] theme.ts / index.html / index.css の基盤反映
+- [x] Header / BottomNav / Loading / PlanBadge の更新（PlanBadge の「★」は装飾抑制ポリシーに合わせ意図的に省略）
+- [x] Dashboard / Onboarding / WorkoutInput / WorkoutLog / Subscribe / Profile の更新
+- [x] プロト未定義の追加要素（Setup.tsx の4ステップヒアリング・TermsGate・Tour・bottomNavSpace 等）
+
+`design_handoff_ui_redesign/` ディレクトリ自体は後の参照用として保管。
 
 ---
 
