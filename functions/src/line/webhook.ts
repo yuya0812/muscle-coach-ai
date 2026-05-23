@@ -74,7 +74,7 @@ async function handleEvent(event: line.WebhookEvent): Promise<void> {
     const welcome: line.messagingApi.TextMessage = {
       type: "text",
       text:
-        `${trainer.name}だ。マッスルコーチAIへようこそ！💪\n\n` +
+        `${trainer.name}です。マッスルコーチAIへようこそ。\n\n` +
         `下のメニューから「設定」を開いて、まずはプロフィールを登録してくれ。\n` +
         `目標やレベルを教えてくれれば、君専用のアドバイスができるからな。\n\n` +
         `準備ができたら、いつでも俺に話しかけてくれ。`,
@@ -112,19 +112,19 @@ async function handleEvent(event: line.WebhookEvent): Promise<void> {
   }
 
   if (command === "メニュー作成") {
-    await replyMessages(replyToken, [buildMsg(`${trainer.thinkingMessage}\nメニューを作成中...⏳`, sender)]);
+    await replyMessages(replyToken, [buildMsg(`${trainer.thinkingMessage}\nメニューを作成中です。`, sender)]);
     try {
       const menu = await generateWeeklyMenu(userId);
       await pushMessages(userId, [buildMsg(menu, sender)]);
     } catch (error) {
-      console.error("Menu generation error:", error);
+      console.error("[Menu generation] error:", error);
       await pushMessages(userId, [buildMsg("メニュー生成に失敗しました。もう一度お試しください。", sender)]);
     }
     return;
   }
 
   if (command === "終わり" || command === "おわり") {
-    await replyMessages(replyToken, [buildMsg("お疲れ様でした！💪 記録を終了します。", sender)]);
+    await replyMessages(replyToken, [buildMsg("お疲れさまでした。記録を終了します。", sender)]);
     return;
   }
 
@@ -152,7 +152,7 @@ async function handleEvent(event: line.WebhookEvent): Promise<void> {
       ]);
       return;
     }
-    await replyMessages(replyToken, [buildMsg(`${trainer.thinkingMessage}\n分析中...📊`, sender)]);
+    await replyMessages(replyToken, [buildMsg(`${trainer.thinkingMessage}\n分析中です。`, sender)]);
     try {
       const responses = await getTrainerResponse(
         userId,
@@ -185,16 +185,21 @@ async function handleEvent(event: line.WebhookEvent): Promise<void> {
   if (!usage.allowed) {
     const msg =
       usage.reason === "cooldown"
-        ? "ちょっと待ってね、続けて送られると追いつかないよ⏳ 数秒後にもう一度送ってね。"
-        : "本日の利用回数の上限に達しました。\n時間をおいてもう一度お試しください💪";
+        ? "続けて送られると追いつかないので、数秒後にもう一度お願いします。"
+        : "本日の利用回数の上限に達しました。\n時間をおいてもう一度お試しください。";
     await replyMessages(replyToken, [buildMsg(msg, sender)]);
     return;
   }
 
-  // プログラム・分析系は生成中であることを明示
-  const waitMsg = ["menu_request", "progress"].includes(intent)
-    ? `📋 プログラムを設計してるよ...\n少しだけ待っててね⏳`
-    : trainer.thinkingMessage;
+  // 意図ごとに待機メッセージを分ける（メニュー設計と進捗分析と通常会話で文脈が違う）
+  let waitMsg: string;
+  if (intent === "menu_request") {
+    waitMsg = "メニューを設計しています。少し待っていてください。";
+  } else if (intent === "progress") {
+    waitMsg = "過去の記録を確認しています。少し待っていてください。";
+  } else {
+    waitMsg = trainer.thinkingMessage;
+  }
 
   await replyMessages(replyToken, [buildMsg(waitMsg, sender)]);
   try {
