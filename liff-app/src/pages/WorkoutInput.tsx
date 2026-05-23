@@ -23,7 +23,7 @@ const emptyExercise = (): ExerciseRow => ({ name: '', setGroups: [emptySetGroup(
 
 const Page = styled.div`
   padding: ${theme.spacing.md};
-  padding-bottom: 100px;
+  padding-bottom: ${theme.layout.bottomNavSpace};
   animation: fadeUp 0.22s ease both;
 `
 

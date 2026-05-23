@@ -49,4 +49,9 @@ export const theme = {
     bold: 700,
     extrabold: 800,
   },
+  layout: {
+    // BottomNav の実高さ + コンテンツとの余白 + iPhone のホームバー領域。
+    // 各ページのコンテンツ末尾 padding-bottom はこれに統一する（タブ切替時に隙間がバラつくのを防ぐ）。
+    bottomNavSpace: 'calc(env(safe-area-inset-bottom, 0px) + 92px)',
+  },
 } as const

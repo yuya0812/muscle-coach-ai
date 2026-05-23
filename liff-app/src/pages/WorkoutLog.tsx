@@ -6,7 +6,7 @@ import Loading from '../components/Loading'
 
 const Page = styled.div`
   padding: ${theme.spacing.md};
-  padding-bottom: 80px;
+  padding-bottom: ${theme.layout.bottomNavSpace};
   animation: fadeUp 0.22s ease both;
 `
 

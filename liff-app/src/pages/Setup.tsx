@@ -56,7 +56,7 @@ const BODY_FAT_OPTIONS = [
 
 const Page = styled.div`
   padding: ${theme.spacing.md};
-  padding-bottom: 100px;
+  padding-bottom: ${theme.layout.bottomNavSpace};
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
