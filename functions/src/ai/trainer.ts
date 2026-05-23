@@ -9,7 +9,7 @@ import {
   PROGRESS_ANALYSIS_PROMPT,
   NUTRITION_ADVICE_PROMPT,
 } from "./prompts";
-import { getAnthropicClient, CLAUDE_MODEL } from "./client";
+import { getAnthropicClient, pickModel } from "./client";
 import {
   buildConversationContext,
   saveConversationMessage,
@@ -125,7 +125,7 @@ async function handleFormQuestion(
   await saveConversationMessage(userId, "user", userMessage);
 
   const response = await client.messages.create({
-    model: CLAUDE_MODEL,
+    model: pickModel("conversation"),
     max_tokens: 1024,
     system: systemPrompt,
     messages: [{ role: "user", content: userMessage }],
@@ -164,7 +164,7 @@ async function handleProgressInquiry(
   await saveConversationMessage(userId, "user", userMessage);
 
   const response = await client.messages.create({
-    model: CLAUDE_MODEL,
+    model: pickModel("conversation"),
     max_tokens: 1024,
     system: systemPrompt,
     messages: [{ role: "user", content: userMessage }],
@@ -197,7 +197,7 @@ async function handleNutritionAdvice(
   await saveConversationMessage(userId, "user", userMessage);
 
   const response = await client.messages.create({
-    model: CLAUDE_MODEL,
+    model: pickModel("conversation"),
     max_tokens: 1024,
     system: systemPrompt,
     messages: [{ role: "user", content: userMessage }],
@@ -231,7 +231,7 @@ async function handleGeneralConversation(
   await saveConversationMessage(userId, "user", userMessage);
 
   const response = await client.messages.create({
-    model: CLAUDE_MODEL,
+    model: pickModel("conversation"),
     max_tokens: 1024,
     system: systemPrompt,
     messages: context.messages,

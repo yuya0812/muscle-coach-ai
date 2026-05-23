@@ -53,7 +53,7 @@ export async function generateWeeklyMenu(userId: string): Promise<string> {
     `以下のユーザー情報と履歴を踏まえて、1週間のトレーニングメニューをJSON形式で作成してください。\n\n` +
     `${profileContext}\n${historyContext}`;
 
-  const jsonStr = await getAIJsonResponse(MENU_GENERATION_PROMPT, userContent);
+  const jsonStr = await getAIJsonResponse(MENU_GENERATION_PROMPT, userContent, "menu");
 
   let parsed: { weeklyPlan: WeeklyPlan; advice: string };
   try {

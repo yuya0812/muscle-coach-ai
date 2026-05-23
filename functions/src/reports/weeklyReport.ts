@@ -1,6 +1,6 @@
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import * as admin from "firebase-admin";
-import { getAnthropicClient, CLAUDE_MODEL } from "../ai/client";
+import { getAnthropicClient, pickModel } from "../ai/client";
 import { pushText } from "../line/messages";
 import { WEEKLY_REPORT_PROMPT } from "../ai/prompts";
 import { normalizeExercise, Exercise } from "../workout/recorder";
@@ -95,7 +95,7 @@ export async function sendWeeklyReportToUser(userId: string): Promise<void> {
   const client = getAnthropicClient();
 
   const response = await client.messages.create({
-    model: CLAUDE_MODEL,
+    model: pickModel("report"),
     max_tokens: 800,
     system: WEEKLY_REPORT_PROMPT,
     messages: [

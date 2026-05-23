@@ -1,6 +1,6 @@
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import * as admin from "firebase-admin";
-import { getAnthropicClient, CLAUDE_MODEL } from "../ai/client";
+import { getAnthropicClient, pickModel } from "../ai/client";
 import { getXClient } from "./client";
 
 // 投稿テーマのローテーション（曜日別）
@@ -78,7 +78,7 @@ ${ctaInstruction(ctaVariant)}
 async function generateTweetContent(theme: string, ctaVariant: CtaVariant): Promise<string> {
   const client = getAnthropicClient();
   const response = await client.messages.create({
-    model: CLAUDE_MODEL,
+    model: pickModel("autopost"),
     max_tokens: 300,
     system: buildSystemPrompt(ctaVariant),
     messages: [{ role: "user", content: `今日のテーマ: ${theme}` }],

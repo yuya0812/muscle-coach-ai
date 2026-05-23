@@ -76,7 +76,7 @@ export async function parseAndSaveWorkout(
   userId: string,
   text: string
 ): Promise<{ exercises: Exercise[]; message: string }> {
-  const jsonStr = await getAIJsonResponse(WORKOUT_PARSE_PROMPT, text);
+  const jsonStr = await getAIJsonResponse(WORKOUT_PARSE_PROMPT, text, "parse");
 
   let parsed: { exercises: LegacyExercise[] };
   try {

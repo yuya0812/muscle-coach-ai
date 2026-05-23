@@ -3,7 +3,7 @@ import * as line from "@line/bot-sdk";
 import { replyMessages, pushMessages, createWorkoutConfirmFlexMessage } from "./messages";
 import { saveWorkoutDirectly, getTotalWorkoutCount, getRecentWorkouts, Exercise } from "../workout/recorder";
 import { getTrainer } from "./trainerCharacter";
-import { getAnthropicClient, CLAUDE_MODEL } from "../ai/client";
+import { getAnthropicClient, pickModel } from "../ai/client";
 import {
   WEAK_POINT_ANALYSIS_PROMPT,
   GROWTH_TREND_ANALYSIS_PROMPT,
@@ -88,7 +88,7 @@ async function generateMilestoneContent(
 
     const client = getAnthropicClient();
     const response = await client.messages.create({
-      model: CLAUDE_MODEL,
+      model: pickModel("report"),
       max_tokens: 1024,
       system: systemPrompt,
       messages: [{ role: "user", content: "分析してください" }],

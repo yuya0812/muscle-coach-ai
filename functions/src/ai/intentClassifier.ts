@@ -143,7 +143,8 @@ export async function classifyIntent(
   try {
     const jsonStr = await getAIJsonResponse(
       INTENT_CLASSIFICATION_PROMPT,
-      message
+      message,
+      "intent"
     );
     const parsed = JSON.parse(jsonStr) as ClassificationResult;
 
