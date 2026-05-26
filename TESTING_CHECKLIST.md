@@ -156,7 +156,7 @@ curl -s -X POST -H "Content-Type: application/json" -d '{"commentText":"x"}' -o 
 
 | # | 結果 |
 |---|------|
-| K1 全て期待通り | [ ] |
+| K1 全て期待通り | [x] 2026-05-23 確認（401 / 401 / 404） |
 
 ---
 
