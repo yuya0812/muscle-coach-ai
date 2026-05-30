@@ -124,8 +124,10 @@ async function handleEvent(event: line.WebhookEvent): Promise<void> {
   if (command === "メニュー作成") {
     await replyMessages(replyToken, [buildMsg(`${trainer.thinkingMessage}\nメニューを作成中です。`, sender)]);
     try {
-      const menu = await generateWeeklyMenu(userId);
-      await pushMessages(userId, [buildMsg(menu, sender)]);
+      const { todayDetail, weekOverview } = await generateWeeklyMenu(userId);
+      // 1通目: 今日分の詳細（実行用） / 2通目: 全体見取り図（学習用）
+      await pushMessages(userId, [buildMsg(todayDetail, sender)]);
+      await pushMessages(userId, [buildMsg(weekOverview, sender)]);
     } catch (error) {
       console.error("[Menu generation] error:", error);
       await pushMessages(userId, [buildMsg("メニュー生成に失敗しました。もう一度お試しください。", sender)]);

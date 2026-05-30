@@ -488,8 +488,10 @@ async function handleConfirm(
   ]);
 
   try {
-    const menu = await generateWeeklyMenu(userId);
-    await pushMessages(userId, [{ type: "text", text: menu, sender } as line.messagingApi.Message]);
+    const { todayDetail, weekOverview } = await generateWeeklyMenu(userId);
+    // 1通目: 今日分の詳細 / 2通目: 全体見取り図
+    await pushMessages(userId, [{ type: "text", text: todayDetail, sender } as line.messagingApi.Message]);
+    await pushMessages(userId, [{ type: "text", text: weekOverview, sender } as line.messagingApi.Message]);
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
     console.error("Initial menu generation error:", errMsg);

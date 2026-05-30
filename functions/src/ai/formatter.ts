@@ -135,7 +135,8 @@ function fullwidthNumber(n: number): string {
 }
 
 /**
- * メニュー生成結果をLINE表示用テキストにフォーマットする。
+ * メニュー生成結果をLINE表示用テキストにフォーマットする（1通版）。
+ * 後方互換のため残しているが、新規生成は formatMenuForLineSplit を使う想定。
  * - 詳細版（weight・rest・notes 全部表示）でまず組み立て
  * - 5,000文字を超える場合は notes を削る → さらに超える場合は補助種目の notes も削る → 最終的に compact 版にフォールバック
  */
@@ -151,6 +152,107 @@ export function formatMenuForLine(menuJson: MenuJson): string {
 
   // どうしても収まらない極端なケースのみ、コンパクト版にフォールバック
   return renderCompact(menuJson);
+}
+
+export interface SplitMenuMessages {
+  /** 1通目: 今日分の Day 詳細（重量・回数・notes 全部）。今日が休息日ならその旨だけ。 */
+  todayDetail: string;
+  /** 2通目: 全体見取り図（Day 1〜N のテーマ一覧 + 設計意図 + 今週のアドバイス）。軽量。 */
+  weekOverview: string;
+}
+
+/**
+ * 案 D「実行用 + 全体見取り図」の 2 通分割でメニューを整形する。
+ *
+ * - 1通目: 今日（todayDayOfWeek）の Day だけ抽出して詳細表示。スマホで開いて
+ *   そのまま実行できる粒度。休息日 or その曜日の Day が定義されていない場合は
+ *   「次回は Day N: テーマ」を示して 2 通目を見るよう促す
+ * - 2通目: 全 Day をテーマだけの 1 行にまとめた見取り図 + 設計意図 + アドバイス。
+ *   重量や notes は省いて、今週の輪郭だけ把握できるサイズにする
+ *
+ * 1通目で「実行」、2通目で「学習」という分離。
+ */
+export function formatMenuForLineSplit(menuJson: MenuJson, todayDayOfWeek: number): SplitMenuMessages {
+  const plan = menuJson.weeklyPlan;
+  const todayDay = plan.days.find((d) => d.dayNumber === todayDayOfWeek);
+
+  return {
+    todayDetail: renderTodayDetail(plan, todayDay),
+    weekOverview: renderWeekOverview(menuJson),
+  };
+}
+
+function renderTodayDetail(
+  plan: MenuJson["weeklyPlan"],
+  todayDay: MenuJson["weeklyPlan"]["days"][number] | undefined,
+): string {
+  const lines: string[] = [];
+  lines.push(DIVIDER_HEAVY);
+  lines.push(`今日のメニュー`);
+  if (todayDay) lines.push(`《 ${todayDay.theme} 》`);
+  lines.push(DIVIDER_HEAVY);
+
+  if (!todayDay) {
+    // 今日は休息日。次の Day を案内して 2 通目への導線にする。
+    const nextDay = plan.days[0];
+    lines.push("");
+    lines.push(`今日は休息日です。`);
+    lines.push(`しっかり体を休めて、次のセッションに備えましょう。`);
+    if (nextDay) {
+      lines.push("");
+      lines.push(`▽ 次のセッション`);
+      lines.push(`Day ${nextDay.dayNumber}: ${nextDay.theme}`);
+      lines.push(`（詳しい内容はこの後のメッセージで送ります）`);
+    }
+    return lines.join("\n");
+  }
+
+  let idx = 1;
+  for (const ex of todayDay.exercises) {
+    lines.push("");
+    lines.push(`［${fullwidthNumber(idx)}］${ex.name}  《${categoryLabel(ex.category)}》`);
+    const weight = ex.weight && ex.weight.trim().length > 0 ? ex.weight : "自重";
+    lines.push(`   ${weight}  ${ex.sets}セット × ${ex.reps}回`);
+    if (ex.restSeconds) lines.push(`   休憩 ${ex.restSeconds}秒`);
+    if (ex.notes) lines.push(`   ▷ ${ex.notes}`);
+    idx += 1;
+  }
+  return lines.join("\n");
+}
+
+function renderWeekOverview(menuJson: MenuJson): string {
+  const plan = menuJson.weeklyPlan;
+  const lines: string[] = [];
+  lines.push(DIVIDER_HEAVY);
+  lines.push(`今週の全体像`);
+  lines.push(`（${plan.splitMethod}・週${plan.daysPerWeek}回）`);
+  if (plan.sessionDurationMin) lines.push(`1回あたり目安  約${plan.sessionDurationMin}分`);
+  lines.push(DIVIDER_HEAVY);
+
+  // Day ごとの 1 行サマリー（重量・回数なし、テーマと種目数だけ）
+  lines.push("");
+  for (const day of plan.days) {
+    const mainCount = day.exercises.filter(
+      (e) => e.category === "main" || e.category === "accessory",
+    ).length;
+    lines.push(`Day ${day.dayNumber}  ${day.theme}  （種目${mainCount}）`);
+  }
+
+  if (plan.rationale) {
+    lines.push("");
+    lines.push(`▼ 設計意図`);
+    lines.push(`${plan.rationale}`);
+  }
+
+  if (menuJson.advice) {
+    lines.push("");
+    lines.push(DIVIDER_LIGHT);
+    lines.push(`《 今週のアドバイス 》`);
+    lines.push(DIVIDER_LIGHT);
+    lines.push(`${menuJson.advice}`);
+  }
+
+  return lines.join("\n");
 }
 
 interface RenderOptions {

@@ -3,7 +3,7 @@ import { getAIJsonResponse } from "../ai/trainer";
 import { MENU_GENERATION_PROMPT } from "../ai/prompts";
 import { getOrCreateUser } from "../user/manager";
 import { buildUserContextBlock } from "../user/metrics";
-import { formatMenuForLine } from "../ai/formatter";
+import { formatMenuForLineSplit, type SplitMenuMessages } from "../ai/formatter";
 import { buildWorkoutHistorySummary, formatWorkoutHistoryForPrompt } from "./history";
 
 const db = admin.firestore;
@@ -39,7 +39,21 @@ interface MenuData {
   status: "active" | "archived";
 }
 
-export async function generateWeeklyMenu(userId: string): Promise<string> {
+export class MenuGenerationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "MenuGenerationError";
+  }
+}
+
+/**
+ * 週次メニューを Claude で生成し、Firestore に保存した上で
+ * LINE 送信用の 2 通分メッセージ（今日詳細 + 全体見取り図）を返す。
+ *
+ * 失敗時は MenuGenerationError を投げる。呼び出し側 (webhook など) は
+ * catch して「メニュー生成に失敗しました」とユーザーに返す責務を持つ。
+ */
+export async function generateWeeklyMenu(userId: string): Promise<SplitMenuMessages> {
   const user = await getOrCreateUser(userId);
 
   // 身体情報・目標・派生メトリクス（BMR/TDEE/タンパク質目標等）込みのコンテキスト
@@ -65,7 +79,7 @@ export async function generateWeeklyMenu(userId: string): Promise<string> {
       tail: jsonStr.slice(-200),
       length: jsonStr.length,
     });
-    return "メニューの生成に失敗しました。もう一度お試しください。";
+    throw new MenuGenerationError("Failed to parse menu JSON");
   }
 
   if (!parsed.weeklyPlan?.days || parsed.weeklyPlan.days.length === 0) {
@@ -74,7 +88,7 @@ export async function generateWeeklyMenu(userId: string): Promise<string> {
       daysLength: parsed.weeklyPlan?.days?.length ?? null,
       head: jsonStr.slice(0, 300),
     });
-    return "メニューの生成に失敗しました。もう一度お試しください。";
+    throw new MenuGenerationError("Empty weeklyPlan from model");
   }
 
   // 既存のアクティブメニューを archived に切り替え
@@ -105,7 +119,10 @@ export async function generateWeeklyMenu(userId: string): Promise<string> {
   batch.set(newMenuRef, menuData);
   await batch.commit();
 
-  return formatMenuForLine({ weeklyPlan: parsed.weeklyPlan, advice: parsed.advice });
+  return formatMenuForLineSplit(
+    { weeklyPlan: parsed.weeklyPlan, advice: parsed.advice },
+    getTodayDayOfWeek(),
+  );
 }
 
 export async function getTodayMenu(userId: string): Promise<string> {

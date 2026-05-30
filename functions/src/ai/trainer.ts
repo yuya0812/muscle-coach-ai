@@ -84,7 +84,8 @@ async function handleRecordIntent(
 
 /**
  * メニュー生成リクエストを処理。
- * 履歴ベースで個別最適化したメニューを生成するため menuGenerator に委譲する。
+ * 履歴ベースで個別最適化したメニューを生成するため menuGenerator に委譲し、
+ * 「今日詳細 + 全体見取り図」の 2 通分のメッセージを返す（呼び出し元で別々に push する想定）。
  */
 async function handleMenuRequest(
   userId: string,
@@ -93,12 +94,14 @@ async function handleMenuRequest(
   try {
     // 動的importで循環参照を避ける（workout/menuGenerator → ai/formatter → 既存トレーナー側、の流れ）
     const { generateWeeklyMenu } = await import("../workout/menuGenerator");
-    const formatted = await generateWeeklyMenu(userId);
+    const { todayDetail, weekOverview } = await generateWeeklyMenu(userId);
 
     await saveConversationMessage(userId, "user", userMessage);
-    await saveConversationMessage(userId, "assistant", formatted);
+    // 会話履歴には 1 通目（実行用）だけ保存する。2 通目（見取り図）は補足扱いで
+    // 履歴に残すと「メニュー後の会話で AI が見取り図を引用する」ような不自然さが出るため。
+    await saveConversationMessage(userId, "assistant", todayDetail);
 
-    return formatForLine(formatted);
+    return [todayDetail, weekOverview];
   } catch {
     return handleGeneralConversation(userId, userMessage);
   }
@@ -128,7 +131,8 @@ async function handleFormQuestion(
     model: pickModel("conversation"),
     max_tokens: 1024,
     system: systemPrompt,
-    messages: [{ role: "user", content: userMessage }],
+    // 直前までの会話履歴 + 今回のメッセージを渡し、マルチターン会話の文脈を維持する
+    messages: context.messages,
   });
 
   const assistantMessage =
@@ -167,7 +171,8 @@ async function handleProgressInquiry(
     model: pickModel("conversation"),
     max_tokens: 1024,
     system: systemPrompt,
-    messages: [{ role: "user", content: userMessage }],
+    // 直前までの会話履歴 + 今回のメッセージを渡す
+    messages: context.messages,
   });
 
   const assistantMessage =
@@ -200,7 +205,8 @@ async function handleNutritionAdvice(
     model: pickModel("conversation"),
     max_tokens: 1024,
     system: systemPrompt,
-    messages: [{ role: "user", content: userMessage }],
+    // 直前までの会話履歴 + 今回のメッセージを渡す
+    messages: context.messages,
   });
 
   const assistantMessage =
