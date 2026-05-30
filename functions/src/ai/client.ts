@@ -57,11 +57,28 @@ export function getAnthropicClient(): Anthropic {
 }
 
 /**
+ * タスク別の出力上限 (max_tokens)。
+ *
+ * メニュー生成は 1週間×6種目×notes(前回→今回+フォーム) で 5000 字超になることがあり、
+ * 2048 トークンでは途中で切れてしまうため余裕を持って 6144 を割り当てる。
+ * 意図分類・記録パースは小さい JSON なので 1024 で十分。
+ */
+const MAX_TOKENS_BY_TASK: Record<ModelTask, number> = {
+  conversation: 1024,
+  menu:         6144,
+  report:       1024,
+  parse:        1024,
+  intent:       512,
+  autopost:     512,
+};
+
+/**
  * JSON出力専用のAI呼び出し
  *
  * systemPromptの指示に従いJSON文字列を返す。
- * task でモデルを切り替える（メニュー生成は Sonnet、記録パース・意図分類は Haiku）。
- * 既存呼び出しの後方互換のため、task 省略時は menu 用モデル（現状は Sonnet）を使う。
+ * task でモデルと max_tokens を切り替える（メニュー生成は Sonnet 6144、
+ * 記録パース・意図分類は Haiku 512〜1024）。
+ * 既存呼び出しの後方互換のため、task 省略時は menu 用設定を使う。
  */
 export async function getAIJsonResponse(
   systemPrompt: string,
@@ -72,10 +89,21 @@ export async function getAIJsonResponse(
 
   const response = await client.messages.create({
     model: pickModel(task),
-    max_tokens: 2048,
+    max_tokens: MAX_TOKENS_BY_TASK[task],
     system: systemPrompt,
     messages: [{ role: "user", content: userMessage }],
   });
+
+  // 出力が max_tokens で打ち切られた場合は早期検知できるよう warn ログを出す。
+  // メニュー生成のような大きな JSON で切れると JSON.parse 失敗 → ユーザーには
+  // 「メニュー生成に失敗しました」しか返らないため、原因切り分けに必要。
+  if (response.stop_reason === "max_tokens") {
+    console.warn("[getAIJsonResponse] stop_reason=max_tokens; output was truncated", {
+      task,
+      maxTokens: MAX_TOKENS_BY_TASK[task],
+      outputTokens: response.usage?.output_tokens,
+    });
+  }
 
   const text =
     response.content[0].type === "text" ? response.content[0].text : "{}";
