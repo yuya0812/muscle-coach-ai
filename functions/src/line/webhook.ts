@@ -121,10 +121,22 @@ async function handleEvent(event: line.WebhookEvent): Promise<void> {
     return;
   }
 
-  if (command === "メニュー作成") {
-    await replyMessages(replyToken, [buildMsg(`${trainer.thinkingMessage}\nメニューを作成中です。`, sender)]);
+  // メニュー作成系コマンド。
+  // - 「メニュー作成」「メニュー」: 既存の active があればそれを返す（毎回作り直さない）
+  // - 「メニュー作り直し」「メニュー再作成」「メニュー作り直して」: 明示的に新規生成
+  // 専属トレーナーとして「同じことを聞けば同じ答えが返る」一貫性を保つための分岐。
+  const isMenuRegenerate =
+    command === "メニュー作り直し" ||
+    command === "メニュー作り直して" ||
+    command === "メニュー再作成" ||
+    command === "メニュー作り変え";
+  if (command === "メニュー作成" || isMenuRegenerate) {
+    const waitText = isMenuRegenerate ? "メニューを作り直しています。" : "メニューを準備しています。";
+    await replyMessages(replyToken, [buildMsg(`${trainer.thinkingMessage}\n${waitText}`, sender)]);
     try {
-      const { todayDetail, weekOverview } = await generateWeeklyMenu(userId);
+      const { todayDetail, weekOverview } = await generateWeeklyMenu(userId, {
+        forceRegenerate: isMenuRegenerate,
+      });
       // 1通目: 今日分の詳細（実行用） / 2通目: 全体見取り図（学習用）
       await pushMessages(userId, [buildMsg(todayDetail, sender)]);
       await pushMessages(userId, [buildMsg(weekOverview, sender)]);

@@ -46,14 +46,82 @@ export class MenuGenerationError extends Error {
   }
 }
 
+// 週次メニューの有効期間（日数）。これを過ぎた active メニューは「古い」とみなし、
+// 既定経路（forceRegenerate なし）でも作り直す。「週次」プログラムなので 7 日。
+const MENU_FRESH_DAYS = 7;
+
 /**
- * 週次メニューを Claude で生成し、Firestore に保存した上で
- * LINE 送信用の 2 通分メッセージ（今日詳細 + 全体見取り図）を返す。
+ * 現在 active な週次メニューを取得する。なければ null。
+ * 「メニュー作成」を押すたびに作り直すのではなく、既存メニューを返すための土台。
+ */
+async function getActiveMenu(userId: string): Promise<MenuData | null> {
+  const snapshot = await db()
+    .collection("users")
+    .doc(userId)
+    .collection("menus")
+    .where("status", "==", "active")
+    .orderBy("generatedAt", "desc")
+    .limit(1)
+    .get();
+
+  if (snapshot.empty) return null;
+  return snapshot.docs[0].data() as MenuData;
+}
+
+/**
+ * active メニューが「まだ今週分として有効か」を判定する。
+ * 週次メニューは生成から MENU_FRESH_DAYS を過ぎたら古いとみなし、再生成に回す。
+ * これにより「翌週も先週のメニューが出続ける」ことを防ぎつつ、
+ * 同じ週の中では同じメニューを返して一貫性を保つ。
+ */
+function isMenuFresh(menu: MenuData): boolean {
+  const generatedMs = menu.generatedAt?.toMillis?.();
+  if (!generatedMs) return false; // 生成日時が壊れている場合は安全側（作り直す）に倒す
+  const ageMs = Date.now() - generatedMs;
+  return ageMs >= 0 && ageMs < MENU_FRESH_DAYS * 24 * 60 * 60 * 1000;
+}
+
+/**
+ * 週次メニューを取得して LINE 送信用の 2 通分メッセージ（今日詳細 + 全体見取り図）を返す。
+ *
+ * 既定では「今週分としてまだ有効な active メニューがあればそれを返す」。これにより
+ * 「メニュー作成」を短時間に複数回押しても、専属トレーナーが毎回違うことを言う
+ * 不自然さ（再現性のなさ）を避ける。
+ *
+ * ただし生成から MENU_FRESH_DAYS（7日）を過ぎた古いメニューは、既定経路でも
+ * 作り直す。週次プログラムなので「翌週も先週のメニューが出続ける」のを防ぐため。
+ *
+ * 新しいメニューを今すぐ作り直したいときは forceRegenerate=true を渡す。
+ * 「メニュー作り直し」のような明示的な再作成キーワードのときだけ true にする想定。
  *
  * 失敗時は MenuGenerationError を投げる。呼び出し側 (webhook など) は
  * catch して「メニュー生成に失敗しました」とユーザーに返す責務を持つ。
  */
-export async function generateWeeklyMenu(userId: string): Promise<SplitMenuMessages> {
+export async function generateWeeklyMenu(
+  userId: string,
+  options: { forceRegenerate?: boolean } = {},
+): Promise<SplitMenuMessages> {
+  // 作り直し指定がなく、今週分としてまだ有効な active メニューがあればそれを再整形して返す。
+  // 古い（7日超）メニューや active なしの場合は新規生成に回す。
+  if (!options.forceRegenerate) {
+    const active = await getActiveMenu(userId);
+    if (active && isMenuFresh(active)) {
+      return formatMenuForLineSplit(
+        { weeklyPlan: active.weeklyPlan, advice: active.advice },
+        getTodayDayOfWeek(),
+      );
+    }
+  }
+
+  return regenerateWeeklyMenu(userId);
+}
+
+/**
+ * Claude でメニューを新規生成し、既存 active を archived に切り替えた上で
+ * 新しいメニューを保存し、2 通分割で返す。
+ * 再現性ガード（既存があれば返す）を通さずに必ず作り直す内部関数。
+ */
+async function regenerateWeeklyMenu(userId: string): Promise<SplitMenuMessages> {
   const user = await getOrCreateUser(userId);
 
   // 身体情報・目標・派生メトリクス（BMR/TDEE/タンパク質目標等）込みのコンテキスト

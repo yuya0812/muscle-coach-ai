@@ -16,8 +16,13 @@ import {
 
 const db = admin.firestore;
 
-const MAX_HISTORY_MESSAGES = 10;
-const MAX_CONTEXT_CHARS = 4000; // コンテキストの最大文字数（トークン節約）
+// 直近の会話を何件・何文字まで AI に渡すか。
+// マルチターンの文脈（短文返答「A」「はい」の続き解釈、相談の深掘り）を保つには
+// ある程度の往復が履歴に残っている必要がある。Sonnet 4.6 は 1M コンテキストで、
+// プロンプトキャッシュも併用するため、ここを保守的にしすぎると文脈切れの方が痛い。
+// メニュー本文は要約プレースホルダに置き換える（trainer.ts 参照）ので、長文での圧迫もない。
+const MAX_HISTORY_MESSAGES = 14;
+const MAX_CONTEXT_CHARS = 6000;
 const WORKOUT_HISTORY_LIMIT = 30; // 履歴サマリーで集計する直近セッション数
 
 export interface ConversationMessage {

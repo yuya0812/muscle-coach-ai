@@ -39,6 +39,15 @@ export function pickModel(task: ModelTask): string {
   return MODEL_BY_TASK[task];
 }
 
+/**
+ * タスク別の出力上限トークン数を返す。
+ * 会話ハンドラ（trainer.ts）が client.messages.create を直接呼ぶときに
+ * 1024 をハードコードしないための共通アクセサ。MAX_TOKENS_BY_TASK の定義に追従する。
+ */
+export function pickMaxTokens(task: ModelTask): number {
+  return MAX_TOKENS_BY_TASK[task];
+}
+
 // 後方互換: 既存コードが import している定数。conversation のモデルを指す。
 // 新規コードは pickModel(taskKind) を使うこと。
 export const CLAUDE_MODEL = MODEL_BY_TASK.conversation;
@@ -63,10 +72,15 @@ export function getAnthropicClient(): Anthropic {
  * 2048 トークンでは途中で切れてしまうため余裕を持って 6144 を割り当てる。
  * 意図分類・記録パースは小さい JSON なので 1024 で十分。
  */
-const MAX_TOKENS_BY_TASK: Record<ModelTask, number> = {
-  conversation: 1024,
+export const MAX_TOKENS_BY_TASK: Record<ModelTask, number> = {
+  // 日本語は 1 文字 ≒ 1〜1.5 トークン。会話・進捗分析・フォーム指導は
+  // プロンプト上「800〜900 字以内」を指示しているが、構造化記号（━━━ 等）や
+  // 専門用語の言い換え括弧が乗ると 1024 トークンでは途中で切れることがある。
+  // 文章が途中で切れる体験を確実に避けるため 2048 に引き上げる（LINE 5000 字制限内）。
+  conversation: 2048,
   menu:         6144,
-  report:       1024,
+  // 週次・マイルストーンレポートも 700〜800 字想定だが、同様に余裕を持たせる。
+  report:       2048,
   parse:        1024,
   intent:       512,
   autopost:     512,
@@ -90,7 +104,10 @@ export async function getAIJsonResponse(
   const response = await client.messages.create({
     model: pickModel(task),
     max_tokens: MAX_TOKENS_BY_TASK[task],
-    system: systemPrompt,
+    // systemPrompt（MENU_GENERATION_PROMPT 等）は全ユーザー共通で不変なので
+    // cache_control を付けてプロンプトキャッシュを効かせる。ユーザー固有のデータは
+    // userMessage 側（プレフィックスの後ろ）にあるためキャッシュのプレフィックスは壊れない。
+    system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
     messages: [{ role: "user", content: userMessage }],
   });
 
