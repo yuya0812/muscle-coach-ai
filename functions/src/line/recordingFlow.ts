@@ -1,14 +1,11 @@
 import * as admin from "firebase-admin";
 import * as line from "@line/bot-sdk";
 import { replyMessages, pushMessages, createWorkoutConfirmFlexMessage } from "./messages";
-import { saveWorkoutDirectly, getTotalWorkoutCount, getRecentWorkouts, Exercise } from "../workout/recorder";
-import { getTrainer } from "./trainerCharacter";
-import { getAnthropicClient, pickModel } from "../ai/client";
-import {
-  WEAK_POINT_ANALYSIS_PROMPT,
-  GROWTH_TREND_ANALYSIS_PROMPT,
-  PROGRAM_OPTIMIZATION_PROMPT,
-} from "../ai/prompts";
+import { saveWorkoutDirectly, getTotalWorkoutCount, Exercise } from "../workout/recorder";
+import { buildAnalysis, analysisKindForMilestone } from "../ai/analysis";
+
+// LINE メッセージの送信者表示名（旧トレーナーキャラ名の代わりに固定のサービス名）
+const APP_SENDER_NAME = "マッスルコーチ";
 
 interface RecordingState {
   step: "category" | "exercise" | "weight" | "reps" | "sets";
@@ -31,70 +28,25 @@ const EXERCISES_BY_CATEGORY: Record<string, string[]> = {
 const db = admin.firestore;
 
 const MILESTONES = [
-  { count: 5, name: "弱点部位レポート", emoji: "🔍" },
-  { count: 15, name: "成長トレンド分析", emoji: "📈" },
-  { count: 30, name: "プログラム最適化", emoji: "⚡" },
+  { count: 5, name: "弱点部位レポート" },
+  { count: 15, name: "成長トレンド分析" },
+  { count: 30, name: "プログラム最適化" },
 ];
 
-async function getTrainerName(userId: string): Promise<string> {
-  const doc = await db().collection("users").doc(userId).get();
-  const trainerType = doc.data()?.profile?.trainerType;
-  return getTrainer(trainerType).name;
-}
-
+/**
+ * マイルストーン到達時の分析本文を生成する。
+ * 旧実装は履歴JSONを丸ごとLLMに渡して自由生成させていたが、
+ * 現在は analysis.ts（コード集計 + AI言語化）に委譲する。
+ * 集計はコード、言語化のみAIなので「同じ記録なら同じ評価」が返る。
+ */
 async function generateMilestoneContent(
   userId: string,
-  milestoneCount: number,
-  trainerName: string
+  milestoneCount: number
 ): Promise<string | null> {
+  const kind = analysisKindForMilestone(milestoneCount);
+  if (!kind) return null;
   try {
-    const workouts = await getRecentWorkouts(userId, milestoneCount);
-
-    const doc = await db().collection("users").doc(userId).get();
-    const profile = doc.data()?.profile || {};
-    const trainerType = profile.trainerType;
-    const trainer = getTrainer(trainerType);
-
-    const historyText = JSON.stringify(
-      workouts.map((w) => ({
-        date: w.date.toDate().toISOString(),
-        exercises: w.exercises,
-      })),
-      null,
-      2
-    );
-
-    let basePrompt: string;
-    if (milestoneCount === 5) {
-      basePrompt = WEAK_POINT_ANALYSIS_PROMPT;
-    } else if (milestoneCount === 15) {
-      basePrompt = GROWTH_TREND_ANALYSIS_PROMPT;
-    } else {
-      basePrompt = PROGRAM_OPTIMIZATION_PROMPT;
-    }
-
-    const profileLines: string[] = [];
-    if (profile.nickname) profileLines.push(`名前: ${profile.nickname}`);
-    if (profile.goal) profileLines.push(`目標: ${profile.goal}`);
-    if (profile.frequency) profileLines.push(`週${profile.frequency}回トレーニング`);
-    const profileContext = profileLines.join(", ");
-
-    const systemPrompt = [
-      trainer.systemPromptAddition,
-      basePrompt,
-      profileContext ? `\n## ユーザー情報\n${profileContext}` : "",
-      `\n## トレーニング履歴\n${historyText}`,
-    ].join("\n\n");
-
-    const client = getAnthropicClient();
-    const response = await client.messages.create({
-      model: pickModel("report"),
-      max_tokens: 1024,
-      system: systemPrompt,
-      messages: [{ role: "user", content: "分析してください" }],
-    });
-
-    return response.content[0].type === "text" ? response.content[0].text : null;
+    return await buildAnalysis(userId, kind, milestoneCount);
   } catch (err) {
     console.error("Milestone content generation error:", err);
     return null;
@@ -106,25 +58,24 @@ export async function checkAndPushMilestone(userId: string): Promise<void> {
   const reached = MILESTONES.find((m) => m.count === totalCount);
   if (!reached) return;
 
-  const trainerName = await getTrainerName(userId);
-  const achievedMsg = buildMilestoneMessage(totalCount, trainerName);
+  const achievedMsg = buildMilestoneMessage(totalCount);
   if (achievedMsg) await pushMessages(userId, [achievedMsg]);
 
-  const content = await generateMilestoneContent(userId, totalCount, trainerName);
+  const content = await generateMilestoneContent(userId, totalCount);
   if (content) {
     await pushMessages(userId, [
-      { type: "text", text: content, sender: { name: trainerName } } as line.messagingApi.Message,
+      { type: "text", text: content, sender: { name: APP_SENDER_NAME } } as line.messagingApi.Message,
     ]);
   }
 }
 
-function buildMilestoneMessage(count: number, trainerName: string): line.messagingApi.TextMessage | null {
+function buildMilestoneMessage(count: number): line.messagingApi.TextMessage | null {
   const reached = MILESTONES.find((m) => m.count === count);
   if (reached) {
     return {
       type: "text",
-      text: `🎉 ${reached.emoji}「${reached.name}」が解放されました！\n${trainerName}が分析するね...少々お待ちを⏳`,
-      sender: { name: trainerName },
+      text: `累計${count}回到達。「${reached.name}」をお届けします。少しお待ちください。`,
+      sender: { name: APP_SENDER_NAME },
     } as line.messagingApi.TextMessage;
   }
 
@@ -133,8 +84,8 @@ function buildMilestoneMessage(count: number, trainerName: string): line.messagi
       const remaining = m.count - count;
       return {
         type: "text",
-        text: `📊 累計${count}回記録達成！\nあと${remaining}回記録すると${m.emoji}「${m.name}」が解放されます🔓`,
-        sender: { name: trainerName },
+        text: `累計${count}回記録達成。あと${remaining}回で「${m.name}」が届きます。`,
+        sender: { name: APP_SENDER_NAME },
       } as line.messagingApi.TextMessage;
     }
   }
@@ -406,12 +357,11 @@ async function handleSets(
   if (g.sets) parts.push(`${g.sets}セット`);
   const summary = parts.join(" ");
 
-  const trainerName = await getTrainerName(userId);
   const confirmMsg = createWorkoutConfirmFlexMessage(summary);
   const continueMsg: line.messagingApi.TextMessage = {
     type: "text",
     text: "もう1種目記録しますか？",
-    sender: { name: trainerName } as Record<string, unknown>,
+    sender: { name: APP_SENDER_NAME } as Record<string, unknown>,
     quickReply: {
       items: [
         { type: "action", action: { type: "message", label: "はい", text: "記録" } },
@@ -424,7 +374,7 @@ async function handleSets(
 
   // マイルストーンチェック
   const totalCount = await getTotalWorkoutCount(userId);
-  const milestoneMsg = buildMilestoneMessage(totalCount, trainerName);
+  const milestoneMsg = buildMilestoneMessage(totalCount);
   if (milestoneMsg) messages.push(milestoneMsg);
 
   await pushMessages(userId, messages);
@@ -432,10 +382,10 @@ async function handleSets(
   // マイルストーン達成時はAI分析コンテンツを生成して追送
   const reachedMilestone = MILESTONES.find((m) => m.count === totalCount);
   if (reachedMilestone) {
-    const content = await generateMilestoneContent(userId, totalCount, trainerName);
+    const content = await generateMilestoneContent(userId, totalCount);
     if (content) {
       await pushMessages(userId, [
-        { type: "text", text: content, sender: { name: trainerName } } as line.messagingApi.Message,
+        { type: "text", text: content, sender: { name: APP_SENDER_NAME } } as line.messagingApi.Message,
       ]);
     }
   }

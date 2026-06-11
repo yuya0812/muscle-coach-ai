@@ -48,9 +48,9 @@ export function createMenuFlexMessage(): line.messagingApi.FlexMessage {
   const liffUrl = liffId ? `https://liff.line.me/${liffId}` : null;
 
   const aiButtons: line.messagingApi.FlexComponent[] = [
-    createMenuButton("🏋️ 今日のメニューを見る", "今日のメニュー"),
-    createMenuButton("📊 トレーニングを分析する", "分析"),
-    createMenuButton("📋 週間メニューを作成", "メニュー作成"),
+    createMenuButton("トレーニングを記録する", "記録"),
+    createMenuButton("記録を分析する", "分析"),
+    createMenuButton("記録の履歴を見る", "履歴"),
   ];
 
   if (liffUrl) {
@@ -84,14 +84,14 @@ export function createMenuFlexMessage(): line.messagingApi.FlexMessage {
         contents: [
           {
             type: "text",
-            text: "💪 マッスルコーチAI",
+            text: "マッスルコーチ",
             weight: "bold",
             size: "lg",
             color: "#ffffff",
           },
           {
             type: "text",
-            text: "AIトレーナーに何でも聞いてね",
+            text: "記録して、分析する",
             size: "xs",
             color: "#d4f5d4",
             margin: "xs",

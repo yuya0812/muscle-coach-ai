@@ -55,6 +55,32 @@ export interface WorkoutHistorySummary {
 }
 
 /**
+ * ある種目の「初期 vs 最近」の重量・回数の変化。成長トレンド判定の最小単位。
+ * すべてコード集計で算出する（AI に推測させない）。
+ */
+export interface ExerciseTrend {
+  name: string;
+  earlyMaxWeight: number | null;
+  recentMaxWeight: number | null;
+  weightDeltaKg: number | null; // recent - early（両方ある場合のみ）
+  earlyTypicalReps: number | null;
+  recentTypicalReps: number | null;
+  /** 重量 or 回数が増えていれば "up"、減っていれば "down"、変化なし/判定不能は "flat" */
+  direction: "up" | "down" | "flat";
+}
+
+/**
+ * 初期セッション群 vs 最近セッション群を比較した成長トレンド。
+ * マイルストーン15回や通常分析で「伸びている種目／伸び悩み」を出すための土台。
+ */
+export interface GrowthTrend {
+  hasEnoughData: boolean; // 比較に足る記録があるか
+  comparedExercises: ExerciseTrend[];
+  improved: ExerciseTrend[]; // direction === "up"
+  stagnant: ExerciseTrend[]; // direction === "flat"（複数回やっているのに変化なし）
+}
+
+/**
  * 直近のワークアウトを集計してサマリーを返す。
  * 履歴が空の場合は totalRecords=0 のサマリーを返す（呼び出し元で「履歴なし」分岐できる）。
  */
@@ -199,4 +225,122 @@ export function formatWorkoutHistoryForPrompt(summary: WorkoutHistorySummary): s
   }
 
   return lines.join("\n") + "\n";
+}
+
+// ============================================================
+// 成長トレンド集計（初期 vs 最近）
+// ============================================================
+
+/** 1種目について、初期群・最近群それぞれの最大重量と典型レップを集計するバッファ */
+interface TrendBuffer {
+  earlyMaxWeight: number | null;
+  recentMaxWeight: number | null;
+  earlyReps: number[];
+  recentReps: number[];
+}
+
+/**
+ * 初期セッション群 vs 最近セッション群を比較して成長トレンドを返す。
+ *
+ * すべてコード集計で算出し、AI には一切推測させない（言語化のみ AI に渡す）。
+ * - 全記録を日付昇順に並べ、前半・後半に分割（境界はセッション数の半分）
+ * - 種目ごとに「初期の最大重量／典型レップ」と「最近の最大重量／典型レップ」を比較
+ * - 重量 or 回数が増えていれば up、減っていれば down、同等なら flat
+ *
+ * @param recentLimit 比較対象に含める直近セッション数の上限（マイルストーン回数など）
+ */
+export async function buildGrowthTrend(
+  userId: string,
+  recentLimit = 30,
+): Promise<GrowthTrend> {
+  const records = await getRecentWorkouts(userId, recentLimit);
+
+  // 比較には最低 4 セッション（前半2・後半2）欲しい。少なすぎると誤判定になる。
+  if (records.length < 4) {
+    return { hasEnoughData: false, comparedExercises: [], improved: [], stagnant: [] };
+  }
+
+  // getRecentWorkouts は日付降順なので、昇順（古い→新しい）に直す
+  const ascending = [...records].reverse();
+  const mid = Math.floor(ascending.length / 2);
+  const earlyRecords = ascending.slice(0, mid);
+  const recentRecords = ascending.slice(mid);
+
+  const buffers = new Map<string, TrendBuffer>();
+
+  const ingest = (
+    record: typeof ascending[number],
+    bucket: "early" | "recent",
+  ) => {
+    for (const ex of record.exercises) {
+      let buf = buffers.get(ex.name);
+      if (!buf) {
+        buf = { earlyMaxWeight: null, recentMaxWeight: null, earlyReps: [], recentReps: [] };
+        buffers.set(ex.name, buf);
+      }
+      for (const g of ex.setGroups ?? []) {
+        if (g.weight != null) {
+          if (bucket === "early") {
+            if (buf.earlyMaxWeight == null || g.weight > buf.earlyMaxWeight) buf.earlyMaxWeight = g.weight;
+          } else {
+            if (buf.recentMaxWeight == null || g.weight > buf.recentMaxWeight) buf.recentMaxWeight = g.weight;
+          }
+        }
+        if (g.reps != null) {
+          if (bucket === "early") buf.earlyReps.push(g.reps);
+          else buf.recentReps.push(g.reps);
+        }
+      }
+    }
+  };
+
+  for (const r of earlyRecords) ingest(r, "early");
+  for (const r of recentRecords) ingest(r, "recent");
+
+  const comparedExercises: ExerciseTrend[] = [];
+  for (const [name, buf] of buffers.entries()) {
+    // 初期・最近の両方に登場した種目だけが比較対象（片方しかなければトレンドは出せない）
+    const inEarly = buf.earlyMaxWeight != null || buf.earlyReps.length > 0;
+    const inRecent = buf.recentMaxWeight != null || buf.recentReps.length > 0;
+    if (!inEarly || !inRecent) continue;
+
+    const earlyTypicalReps = median(buf.earlyReps);
+    const recentTypicalReps = median(buf.recentReps);
+    const weightDeltaKg =
+      buf.earlyMaxWeight != null && buf.recentMaxWeight != null
+        ? buf.recentMaxWeight - buf.earlyMaxWeight
+        : null;
+
+    const repDelta =
+      earlyTypicalReps != null && recentTypicalReps != null
+        ? recentTypicalReps - earlyTypicalReps
+        : null;
+
+    let direction: ExerciseTrend["direction"] = "flat";
+    if ((weightDeltaKg != null && weightDeltaKg > 0) || (repDelta != null && repDelta > 0)) {
+      direction = "up";
+    } else if ((weightDeltaKg != null && weightDeltaKg < 0) || (repDelta != null && repDelta < 0)) {
+      direction = "down";
+    }
+
+    comparedExercises.push({
+      name,
+      earlyMaxWeight: buf.earlyMaxWeight,
+      recentMaxWeight: buf.recentMaxWeight,
+      weightDeltaKg,
+      earlyTypicalReps,
+      recentTypicalReps,
+      direction,
+    });
+  }
+
+  // 伸びた順（重量増が大きい順）に並べる
+  comparedExercises.sort((a, b) => (b.weightDeltaKg ?? 0) - (a.weightDeltaKg ?? 0));
+
+  return {
+    hasEnoughData: comparedExercises.length > 0,
+    comparedExercises,
+    improved: comparedExercises.filter((e) => e.direction === "up"),
+    stagnant: comparedExercises.filter((e) => e.direction === "flat"),
+  };
 }

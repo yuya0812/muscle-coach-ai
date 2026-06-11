@@ -1,8 +1,34 @@
 # 次回再開時のタスク
 
-最終更新: 2026-05-23
+最終更新: 2026-06-11
 
 セッション再開時はまずこのファイルを読む。完了したタスクは `[x]` でチェック、新しく見つけたら追加。
+
+---
+
+## 【重要】2026-06 方針転換: AI用途を「記録パース + 分析の言語化」に絞った
+
+メニュー生成・コーチング会話（フォーム指導・栄養相談・一般会話）・トレーナー3キャラの人格を
+**全て廃止**し、AIの用途を次の2つに限定した。設計の経緯は
+[docs/spec/ai-scope-pivot.md](docs/spec/ai-scope-pivot.md) と
+[docs/spec/ai-scope-pivot-plan.md](docs/spec/ai-scope-pivot-plan.md) を参照。
+
+1. 雑な入力 → 構造化記録（`workout/recorder.ts`）
+2. 記録の集計・分析 → コード集計 + AI言語化（`workout/history.ts` + `ai/analysis.ts`）
+
+- 削除: `workout/menuGenerator.ts` / `ai/context.ts` / `line/trainerCharacter.ts`
+- 作り替え: マイルストーン・週次レポートを `buildAnalysis`（コード集計+AI言語化）に載せ替え
+- 意図分類は record / analyze / greeting / other の4分類に縮小
+- LINE の sender 名は固定 `"マッスルコーチ"`（`APP_SENDER_NAME`）。キャラ名は使わない
+- オンボーディングは6ステップ→5ステップ（トレーナー選択を撤去）
+
+### この転換に伴う残課題（次セッション以降）
+- [ ] プレミアム課金軸の再設計（旧「AI相談 月5回」「目標別プログラム」は廃止。分析回数制限を再定義）
+- [ ] 既存の絵文字残存の整理: `line/recordingFlow.ts`（部位選択の💪 2箇所）/ `line/messages.ts` /
+      `index.ts` / `x/autoPost.ts`。今回のスコープ外として未着手。方針に合わせ除去するか判断
+- [ ] LIFF 側（React）のメニュー表示画面・トレーナー名カスタマイズ UI の扱い（残す/外す）
+- [ ] `trainerType`/`trainerName` フィールドは残置中。完全に使わないなら将来マイグレーションで削除
+- [ ] 動作確認: 記録パース / 「分析して」/ マイルストーン(5/15/30) / 週次レポートの新経路
 
 ---
 

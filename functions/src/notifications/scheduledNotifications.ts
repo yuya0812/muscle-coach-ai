@@ -2,31 +2,20 @@ import { onSchedule } from "firebase-functions/v2/scheduler";
 import * as admin from "firebase-admin";
 import * as line from "@line/bot-sdk";
 import { pushMessages } from "../line/messages";
-import { getTrainer } from "../line/trainerCharacter";
 import { sendWeeklyReportToUser } from "../reports/weeklyReport";
 
-// トレーナーキャラクター別リマインダーメッセージ
-const DAILY_REMINDERS: Record<string, string[]> = {
-  hot: [
-    "今日もトレーニングするぞ！💪\n諦めたら終わりだ！記録して一緒に追い込もう！",
-    "体は裏切らない！今日も記録して積み上げよう🔥",
-    "毎日コツコツが最強の武器だ！今日も「記録」から始めよう💪",
-  ],
-  science: [
-    "定期的なトレーニングが筋肥大の最大要因です📊\n今日の記録をつけていきましょう。",
-    "一貫性こそが最大の変数です📈\n今日も記録を積み上げましょう。",
-    "超回復サイクルを最適化するには記録が不可欠です🧪\n今日はどんなトレーニングをしましたか？",
-  ],
-  buddy: [
-    "やあ！今日も一緒にやろうよ〜😄\n「記録」って送ってくれたら付き合うよ！",
-    "ねえねえ、今日体動かした？😊\nなんでも聞いてね、一緒に頑張ろ！",
-    "お疲れ〜！今日もトレーニングどう？💪\nメニューは「今日のメニュー」で見れるよ！",
-  ],
-};
+// LINE メッセージの送信者表示名（旧トレーナーキャラ名の代わりに固定のサービス名）
+const APP_SENDER_NAME = "マッスルコーチ";
 
-function getReminderMessage(trainerType: string, nickname: string): string {
-  const msgs = DAILY_REMINDERS[trainerType] || DAILY_REMINDERS.hot;
-  const base = msgs[Math.floor(Math.random() * msgs.length)];
+// 日次リマインダー（キャラ別ではなく汎用文言。記録を促すことに徹する）
+const DAILY_REMINDERS: string[] = [
+  "今日のトレーニングを記録しましょう。「ベンチプレス 60kg 10回 3セット」のように送るだけです。",
+  "今日も一歩。トレーニングをしたら記録に残しておきましょう。",
+  "コツコツ続けるのが一番の近道です。今日の記録を送ってください。",
+];
+
+function getReminderMessage(nickname: string): string {
+  const base = DAILY_REMINDERS[Math.floor(Math.random() * DAILY_REMINDERS.length)];
   return `${nickname}さん、${base}`;
 }
 
@@ -66,10 +55,8 @@ export const sendScheduledNotifications = onSchedule(
       if (notifHour !== currentHour) continue;
 
       const userId = userDoc.id;
-      const trainer = getTrainer(data.profile?.trainerType);
-      const trainerName: string = data.profile?.trainerName || trainer.name;
       const nickname: string = data.profile?.nickname || data.profile?.name || "ゲスト";
-      const sender = { name: trainerName };
+      const sender = { name: APP_SENDER_NAME };
 
       // 月曜は週次レポートを必ず送る（プレミアム会員のみ）。曜日設定の影響を受けない固定通知。
       if (isMonday) {
@@ -89,7 +76,7 @@ export const sendScheduledNotifications = onSchedule(
       if (!notifDays.includes(currentDay)) continue;
 
       try {
-        const text = getReminderMessage(data.profile?.trainerType || "hot", nickname);
+        const text = getReminderMessage(nickname);
         await pushMessages(userId, [
           { type: "text", text, sender } as line.messagingApi.Message,
         ]);

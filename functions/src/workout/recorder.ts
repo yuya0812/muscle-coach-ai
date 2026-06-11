@@ -230,6 +230,22 @@ export async function getWorkoutsByMonth(
   return snapshot.docs.map((doc) => normalizeWorkoutRecord(doc.data() as WorkoutRecord));
 }
 
+/**
+ * 指定日数以内（過去 days 日）に記録されたワークアウト件数を返す。
+ * 週次レポートが「今週分の記録があるか」を判定するために使う。
+ */
+export async function countWorkoutsSince(userId: string, days: number): Promise<number> {
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const snapshot = await db()
+    .collection("users")
+    .doc(userId)
+    .collection("workouts")
+    .where("date", ">=", admin.firestore.Timestamp.fromDate(since))
+    .count()
+    .get();
+  return snapshot.data().count;
+}
+
 export async function getTotalWorkoutCount(userId: string): Promise<number> {
   const snapshot = await db()
     .collection("users")

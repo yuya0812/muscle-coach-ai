@@ -22,20 +22,35 @@
 
 ---
 
-## 設計原則: LIFF=記録 / LINE=コーチング
+## 設計原則: LIFF=閲覧 / LINE=記録の入口＋分析の言語化
 
 **この棲み分けを絶対に崩さない。** 新機能の配置先で迷ったらこれで判断する。
+
+> 2026-06 方針転換: 旧原則「LINE=コーチング」を廃止。AIに「正解のない出力」（メニュー生成・
+> フォーム指導・コーチング会話）をさせるのをやめ、AIの用途を「①雑な入力を構造化記録する
+> ②記録を集計して分析を言語化する」の2つに限定した。トレーナー3キャラの人格も廃止。
+> 詳細は [docs/spec/ai-scope-pivot.md](docs/spec/ai-scope-pivot.md)。
 
 | 配置先 | 用途 | 例 |
 |---|---|---|
 | **LIFFアプリ** | 記録・閲覧・データダッシュボード（静的、ユーザーが能動的に開く） | ワークアウト記録、グラフ、履歴カレンダー、プロフィール設定、決済 |
-| **LINEトーク** | AIトレーナーとの対話・通知・レポート（コーチからの能動的なコミュニケーション） | AI会話、マイルストーンレポート、週次レポート、リマインダー、メニュー提案 |
+| **LINEトーク** | 記録の入口・分析の言語化・通知（雑に投げて、集計結果を言葉で受け取る場所） | 自然文の記録パース、分析（コード集計+AI言語化）、マイルストーン、週次レポート、リマインダー |
 
-**判断基準:** 「これはコーチが言うこと？それともユーザーが見るデータ？」
-- コーチが言うこと → LINE
-- ユーザーが見るデータ → LIFF
+**判断基準:** 「これはユーザーが見るデータ？ それとも記録の投入・集計結果の受け取り？」
+- 記録の投入・集計結果の言語化 → LINE
+- ユーザーが能動的に見るデータ（グラフ・履歴・設定） → LIFF
 
-**理由:** ユーザーの認知モデルをシンプルに保ち、AIトレーナー（コウ/ドクターK/アキラ先輩）のキャラクター性を LINE に集約することで「人格を持った専属トレーナー」というナラティブを保つため。
+**AIに任せること / 任せないこと（最重要）:**
+- AIに任せる: 自然言語の入出力変換だけ（雑な入力→構造化、集計済み数値→読みやすい文章）
+- AIに任せない: 判断・計算（弱点・伸び悩み・部位バランスはコードが集計し判定する）
+- 理由: 「正解のない生成」は検証も再現もできずユーザーの信頼を損なう。入出力が検証可能で
+  再現性のある用途にAIを限定することで、「同じ記録なら同じ分析」を保証する。
+
+**実装の核:**
+- 記録パース: `functions/src/workout/recorder.ts`（`parseAndSaveWorkout` / `saveWorkoutDirectly`）
+- 集計: `functions/src/workout/history.ts`（部位タッチ数・最大重量・成長トレンド `buildGrowthTrend`）
+- 分析の言語化: `functions/src/ai/analysis.ts`（`buildAnalysis`）+ `ANALYSIS_VERBALIZE_PROMPT`
+  （数値の捏造を厳禁。マイルストーン・通常分析・週次レポートで共通利用）
 
 ---
 
@@ -54,13 +69,14 @@
 ### functions/src/ ディレクトリ責務マップ
 
 ```
-ai/             AIトレーナーのコア（client / prompts / trainer / intentClassifier / formatter / context）
+ai/             AIのコア（client / prompts / trainer / intentClassifier / formatter / analysis）
+                ※ 用途は記録パースと分析の言語化のみ。メニュー生成・コーチング会話は廃止。
 line/           LINE関連処理（webhook / onboardingFlow / recordingFlow / trainerCharacter / messages / richMenu）
 notifications/  日次リマインダー（毎時実行・ユーザー設定時刻にpush）
 reports/        週次レポート（月曜8:00 JST）
 subscription/   Stripe決済
 user/           ユーザー管理・利用回数カウント
-workout/        ワークアウト記録・取得・週次メニュー生成
+workout/        ワークアウト記録・取得・集計（recorder / history）。メニュー生成は廃止
 auth/           LIFF Token認証
 x/              X自動投稿
 index.ts        全Function export + LIFF用 REST API ハンドラ
@@ -136,19 +152,22 @@ firebase deploy --only firestore:rules
 
 ---
 
-## プレミアムプラン仕様（確定済み）
+## プレミアムプラン仕様
+
+> 2026-06 方針転換で「AI相談（コーチング）」「目標別パーソナルプログラム」は廃止。
+> 課金軸は分析機能に合わせて要再設計（下表は暫定。`AI分析` は分析の言語化リクエストを指す）。
 
 | 機能 | フリー | プレミアム |
 |------|-------|-----------|
-| AI相談 | 月5回 | 無制限 |
-| 筋トレ記録 | ◯ | ◯ |
+| AI分析（記録の集計+言語化） | 月5回 | 無制限 |
+| 筋トレ記録（自然文パース含む） | ◯ | ◯ |
 | マイルストーン（全段階） | ◯ | ◯ |
 | 週次AIレポート | ✕ | ◯ |
 | 日次/週次プッシュ通知 | ✕ | ◯ |
-| 目標別パーソナルプログラム | ✕ | ◯ |
 
 - **価格:** ¥1,480/月
 - **トライアル:** 1週間無料
+- 課金軸（回数制限の対象・閾値）は分析機能の運用実績を見て見直す。
 
 ---
 
@@ -156,6 +175,7 @@ firebase deploy --only firestore:rules
 
 ### 🔴 マイルストーンは記録経路ごとに発火を仕込む必要がある
 ワークアウト記録は **LINE経由（recordingFlow.ts）** と **LIFF経由（POST /api/workouts）** の2系統ある。マイルストーン達成チェックは両方で呼ばないとレポートが届かない。共通関数 `checkAndPushMilestone(userId)` を [recordingFlow.ts](functions/src/line/recordingFlow.ts) からexportしている。
+2026-06 方針転換後、マイルストーンの**中身**は「履歴JSONをLLMに丸投げ」から「コード集計+AI言語化」（[analysis.ts](functions/src/ai/analysis.ts) の `buildAnalysis`）に変更済み。トリガー（5/15/30回）と2経路発火の構造は不変。
 
 ### 🔴 LINE Developers Console の応答設定
 - **応答モード: Bot**（チャットモードにすると返信が無効化される）
@@ -163,7 +183,8 @@ firebase deploy --only firestore:rules
 - **挨拶メッセージ: OFF**（オンボーディングと競合する）
 
 ### 🟡 Anthropic APIクレジット切れで全AI機能停止する
-クレジット枯渇すると AI会話・マイルストーン・週次レポート・X自動投稿が全部止まる。`credit balance is too low` エラーがログに出たら即課金。
+クレジット枯渇すると 記録パース・分析・マイルストーン・週次レポート・X自動投稿が全部止まる。`credit balance is too low` エラーがログに出たら即課金。
+（特に記録パースが止まると自然文記録が一切保存できなくなるので影響が大きい）
 
 ### 🔴 X API は Pay-per-use 課金。URL含む投稿は単価13倍
 新規アカウントは Free / Basic / Pro tier に申し込めず Pay-per-use 一択（2026/02〜）。
@@ -174,8 +195,12 @@ URLなし $0.015/件・URL含む $0.20/件 で、本プロジェクトは**本�
 ### 🟡 LIFF SDK は HTTPSドメインでのみ動作
 ローカル開発時は `liff-app` を `npm run dev` した URL を LIFF Endpoint に登録するか、LIFF Inspector を使う。
 
-### 🟡 トレーナー名のカスタマイズ
-ユーザーは LIFFアプリのプロフィールでトレーナー名を変更できる。LINE側でメッセージ送信する時は必ず `getTrainerName(userId)` で取得した名前を `sender.name` に入れる。
+### 🟡 トレーナーキャラは廃止（2026-06 方針転換）
+トレーナー3キャラ（コウ/ドクターK/アキラ先輩）の人格と `trainerCharacter.ts` は削除済み。
+LINE の `sender.name` は固定のサービス名 `"マッスルコーチ"`（各ファイルの `APP_SENDER_NAME`）を使う。
+`getTrainer`/`getTrainerName`/`thinkingMessage` は存在しない。
+データモデルの `trainerType`/`trainerName` フィールドは既存ユーザー保護のため残置しているが、
+新規に参照・書き込みしない（LIFF プロフィールのトレーナー名 UI を残す場合も応答口調には影響させない）。
 
 ---
 

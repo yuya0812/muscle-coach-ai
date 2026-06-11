@@ -1,17 +1,15 @@
 import { onRequest } from "firebase-functions/v2/https";
 import * as line from "@line/bot-sdk";
-import { getTrainerResponse, classifyIntent } from "../ai/trainer";
-import { formatGreeting } from "../ai/formatter";
-import { getOrCreateUser, incrementUsage, getRemainingUsage } from "../user/manager";
-import { getRecentWorkouts, formatWorkoutHistory, parseAndSaveWorkout } from "../workout/recorder";
-import { generateWeeklyMenu, getTodayMenu } from "../workout/menuGenerator";
+import { classifyIntent, USAGE_GUIDE } from "../ai/trainer";
+import { buildAnalysis } from "../ai/analysis";
+import { formatGreeting, formatForLine } from "../ai/formatter";
+import { getOrCreateUser, incrementUsage } from "../user/manager";
+import { getRecentWorkouts, formatWorkoutHistory, parseAndSaveWorkout, getTotalWorkoutCount } from "../workout/recorder";
 import { replyMessages, pushMessages, createMenuFlexMessage } from "./messages";
 import { startRecordingFlow, handleRecordingStep, checkAndPushMilestone } from "./recordingFlow";
-import { getTrainer } from "./trainerCharacter";
 
-// 「今日のメニュー」を聞く自然文を検出するパターン。
-// 「今日」+ 「メニュー / 何やる / 何する / トレーニング」あたりが含まれていれば今日分メニュー要求とみなす。
-const TODAY_MENU_QUERY = /今日.*(メニュー|何|なに|トレ|やる|やれ|する|すれ)|(メニュー|トレ).*今日/;
+// LINE メッセージの送信者表示名（旧トレーナーキャラ名の代わりに固定のサービス名を使う）
+const APP_SENDER_NAME = "マッスルコーチ";
 
 function getChannelSecret(): string {
   const secret = process.env.LINE_CHANNEL_SECRET;
@@ -69,20 +67,20 @@ function buildMsg(text: string, sender: { name: string }): line.messagingApi.Mes
 async function handleEvent(event: line.WebhookEvent): Promise<void> {
   console.log(`[handleEvent] type=${event.type}, source=${JSON.stringify(event.source)}`);
 
-  // フォロー時: シンプルな歓迎メッセージ + LIFFへ誘導（旧オンボーディングのボタンフローは廃止）
+  // フォロー時: シンプルな歓迎メッセージ + 記録の使い方案内
   if (event.type === "follow") {
     const userId = event.source.userId;
     if (!userId) return;
     await getOrCreateUser(userId);
-    const trainer = getTrainer("hot");
     const welcome: line.messagingApi.TextMessage = {
       type: "text",
       text:
-        `${trainer.name}です。マッスルコーチAIへようこそ。\n\n` +
-        `下のメニューから「設定」を開いて、まずはプロフィールを登録してくれ。\n` +
-        `目標やレベルを教えてくれれば、君専用のアドバイスができるからな。\n\n` +
-        `準備ができたら、いつでも俺に話しかけてくれ。`,
-      sender: { name: trainer.name },
+        "マッスルコーチへようこそ。\n\n" +
+        "トレーニングをしたら、こんなふうに送るだけで記録できます。\n" +
+        "・ベンチプレス 60kg 10回 3セット\n" +
+        "・今日はスクワット80キロ5回を3セット\n\n" +
+        "記録がたまったら「分析して」と送ると、部位のバランスや伸びている種目をまとめます。",
+      sender: { name: APP_SENDER_NAME },
     };
     await replyMessages(event.replyToken, [welcome]);
     return;
@@ -97,53 +95,12 @@ async function handleEvent(event: line.WebhookEvent): Promise<void> {
   const replyToken = event.replyToken;
   const user = await getOrCreateUser(userId);
 
-  // trainerType未設定なら hot をデフォルトとして扱う（旧フォールバックの再オンボーディングは廃止）
-  const effectiveTrainerType = user.profile.trainerType || "hot";
-  const trainer = getTrainer(effectiveTrainerType);
-  const sender = { name: user.profile.trainerName || trainer.name };
+  // 送信者表示名は固定のサービス名（旧トレーナーキャラ名は廃止）
+  const sender = { name: APP_SENDER_NAME };
   const command = text.toLowerCase();
 
   if (command === "メニュー" || command === "ヘルプ" || command === "help") {
     await replyMessages(replyToken, [createMenuFlexMessage()]);
-    return;
-  }
-
-  // 完全一致 + 自然文の「今日のメニュー」要求を同じ経路に乗せる。
-  // 「今日のメニュー教えて」「今日は何やる？」「今日のトレーニングは？」等を拾う。
-  if (
-    command === "今日のメニュー" ||
-    command === "今日" ||
-    TODAY_MENU_QUERY.test(text)
-  ) {
-    const menu = await getTodayMenu(userId);
-    await replyMessages(replyToken, [buildMsg("今日のメニューを送ります。", sender)]);
-    await pushMessages(userId, [buildMsg(menu, sender)]);
-    return;
-  }
-
-  // メニュー作成系コマンド。
-  // - 「メニュー作成」「メニュー」: 既存の active があればそれを返す（毎回作り直さない）
-  // - 「メニュー作り直し」「メニュー再作成」「メニュー作り直して」: 明示的に新規生成
-  // 専属トレーナーとして「同じことを聞けば同じ答えが返る」一貫性を保つための分岐。
-  const isMenuRegenerate =
-    command === "メニュー作り直し" ||
-    command === "メニュー作り直して" ||
-    command === "メニュー再作成" ||
-    command === "メニュー作り変え";
-  if (command === "メニュー作成" || isMenuRegenerate) {
-    const waitText = isMenuRegenerate ? "メニューを作り直しています。" : "メニューを準備しています。";
-    await replyMessages(replyToken, [buildMsg(`${trainer.thinkingMessage}\n${waitText}`, sender)]);
-    try {
-      const { todayDetail, weekOverview } = await generateWeeklyMenu(userId, {
-        forceRegenerate: isMenuRegenerate,
-      });
-      // 1通目: 今日分の詳細（実行用） / 2通目: 全体見取り図（学習用）
-      await pushMessages(userId, [buildMsg(todayDetail, sender)]);
-      await pushMessages(userId, [buildMsg(weekOverview, sender)]);
-    } catch (error) {
-      console.error("[Menu generation] error:", error);
-      await pushMessages(userId, [buildMsg("メニュー生成に失敗しました。もう一度お試しください。", sender)]);
-    }
     return;
   }
 
@@ -168,33 +125,14 @@ async function handleEvent(event: line.WebhookEvent): Promise<void> {
     return;
   }
 
+  // 「分析」コマンド: 明示的な分析依頼。意図分類を経ずに直接 analyze として扱う。
+  // 利用回数チェック・クールダウンは runAnalysis 内で行う（コマンド経路でも課金制限が効くように）。
   if (command === "分析") {
-    const remaining = await getRemainingUsage(userId);
-    if (remaining !== null && remaining <= 0) {
-      await replyMessages(replyToken, [
-        buildMsg("本日の無料利用回数を超えました。\nプレミアムプランに登録すると無制限に利用できます！", sender),
-      ]);
-      return;
-    }
-    await replyMessages(replyToken, [buildMsg(`${trainer.thinkingMessage}\n分析中です。`, sender)]);
-    try {
-      const responses = await getTrainerResponse(
-        userId,
-        "以下のトレーニング記録を分析して、フィードバックをください",
-        user.profile.name
-      );
-      await incrementUsage(userId);
-      for (const msg of responses) {
-        await pushMessages(userId, [buildMsg(msg, sender)]);
-      }
-    } catch (error) {
-      console.error("Analysis error:", error);
-      await pushMessages(userId, [buildMsg("分析に失敗しました。もう一度お試しください。", sender)]);
-    }
+    await runAnalysis(userId, replyToken, sender, user.profile.name);
     return;
   }
 
-  // 意図を先に分類して表示を分岐
+  // 意図を分類（record / analyze / greeting / other）
   const { intent } = await classifyIntent(text);
 
   // 挨拶はAI呼び出しなし・利用カウントなしで即応答
@@ -205,7 +143,6 @@ async function handleEvent(event: line.WebhookEvent): Promise<void> {
   }
 
   // 記録意図：自然文（例「腹筋10回×3セット」）を直接パースして Firestore に保存する。
-  // ここを AI 会話経路に流すと「腹筋についての一般論」が返るだけで記録は1件も残らないため、
   // 必ずパース → 保存 → サマリー返却 → マイルストーンチェックの順に処理する。
   if (intent === "record") {
     await replyMessages(replyToken, [buildMsg("記録を読み取っています。", sender)]);
@@ -225,7 +162,44 @@ async function handleEvent(event: line.WebhookEvent): Promise<void> {
     return;
   }
 
-  // AI会話（利用回数チェック + 連投クールダウン）
+  // 分析意図：利用回数チェック + 連投クールダウンは runAnalysis 内で実施。
+  if (intent === "analyze") {
+    await runAnalysis(userId, replyToken, sender, user.profile.name);
+    return;
+  }
+
+  // その他（雑談・未対応）: 記録の使い方を静的に案内する。
+  // ここで再度 AI 分類を呼ばない（intent は既に確定済みで、案内は固定文のため）。
+  await replyMessages(replyToken, [buildMsg(USAGE_GUIDE, sender)]);
+}
+
+/**
+ * 分析（コード集計 + AI言語化）を実行して push する共通処理。
+ * 「分析」コマンドと analyze 意図の両方から呼ばれる。
+ *
+ * 利用回数チェック・連投クールダウンをここで一元的に行うことで、どちらの経路から来ても
+ * 課金制限が確実に効くようにする（コマンド経路だけ制限をすり抜ける穴を作らない）。
+ */
+async function runAnalysis(
+  userId: string,
+  replyToken: string,
+  sender: { name: string },
+  _userName?: string,
+): Promise<void> {
+  // 記録が1件もないユーザーには分析できない。この場合は利用回数を消費せずに案内を返す
+  // （記録なしで AI も呼ばないのに無料枠を1消費してしまう退行を防ぐ）。
+  const totalCount = await getTotalWorkoutCount(userId);
+  if (totalCount === 0) {
+    await replyMessages(replyToken, [
+      buildMsg(
+        "まだ分析できる記録がありません。\n「ベンチプレス 60kg 10回 3セット」のように記録を送ってみてください。",
+        sender,
+      ),
+    ]);
+    return;
+  }
+
+  // 利用回数チェック + 連投クールダウン（記録があるユーザーにのみ課金判定する）
   const usage = await incrementUsage(userId);
   if (!usage.allowed) {
     const msg =
@@ -236,24 +210,21 @@ async function handleEvent(event: line.WebhookEvent): Promise<void> {
     return;
   }
 
-  // 意図ごとに待機メッセージを分ける（メニュー設計と進捗分析と通常会話で文脈が違う）
-  let waitMsg: string;
-  if (intent === "menu_request") {
-    waitMsg = "メニューを設計しています。少し待っていてください。";
-  } else if (intent === "progress") {
-    waitMsg = "過去の記録を確認しています。少し待っていてください。";
-  } else {
-    waitMsg = trainer.thinkingMessage;
-  }
-
-  await replyMessages(replyToken, [buildMsg(waitMsg, sender)]);
+  await replyMessages(replyToken, [buildMsg("記録を集計しています。少し待っていてください。", sender)]);
   try {
-    const responses = await getTrainerResponse(userId, text, user.profile.name);
-    for (const msg of responses) {
+    const text = await buildAnalysis(userId, "overview");
+    if (!text) {
+      // 記録はあるのに集計できなかった例外的ケース。案内だけ返す。
+      await pushMessages(userId, [
+        buildMsg("分析できる記録が見つかりませんでした。もう少し記録をためてみてください。", sender),
+      ]);
+      return;
+    }
+    for (const msg of formatForLine(text)) {
       await pushMessages(userId, [buildMsg(msg, sender)]);
     }
   } catch (error) {
-    console.error("AI response error:", error);
-    await pushMessages(userId, [buildMsg("すみません、エラーが発生しました。もう一度お試しください。", sender)]);
+    console.error("Analysis error:", error);
+    await pushMessages(userId, [buildMsg("分析に失敗しました。もう一度お試しください。", sender)]);
   }
 }
