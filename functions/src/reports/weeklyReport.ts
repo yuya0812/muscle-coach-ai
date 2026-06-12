@@ -57,8 +57,8 @@ export async function sendWeeklyReportToUser(userId: string): Promise<void> {
     return;
   }
 
-  // 今週の記録がある場合は、直近の総括（集計 + 言語化）を届ける。
-  const reportText = await buildAnalysis(userId, "overview");
+  // 今週の記録がある場合は、週区切りの分析（集計 + ハイライト選定 + 言語化）を届ける。
+  const reportText = await buildAnalysis(userId);
   if (!reportText) {
     await pushText(
       userId,

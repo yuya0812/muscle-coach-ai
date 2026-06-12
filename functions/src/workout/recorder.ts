@@ -72,36 +72,88 @@ export function totalVolumeOf(exercise: Exercise): number {
   }, 0);
 }
 
-export async function parseAndSaveWorkout(
-  userId: string,
-  text: string
-): Promise<{ exercises: Exercise[]; message: string }> {
+/**
+ * 自然文をAIでパースして Exercise[] を返す（保存はしない）。
+ * 聞き返しフローのため、パースと保存を分離している。
+ * パース失敗・種目ゼロのときは空配列を返す（呼び出し側で案内に分岐）。
+ *
+ * 各種目は必ず1つ以上の setGroup を持つ形に正規化する
+ * （「スクワットやった」のような値なし入力も、全 null の1グループとして
+ * 欠損検出・聞き返しの対象にできるようにするため）。
+ */
+export async function parseWorkoutText(text: string): Promise<Exercise[]> {
   const jsonStr = await getAIJsonResponse(WORKOUT_PARSE_PROMPT, text, "parse");
 
   let parsed: { exercises: LegacyExercise[] };
   try {
     parsed = JSON.parse(jsonStr);
   } catch {
-    return {
-      exercises: [],
-      message: "記録の解析に失敗しました。もう一度入力してみてください。",
-    };
+    return [];
   }
 
-  if (!parsed.exercises || parsed.exercises.length === 0) {
-    return {
-      exercises: [],
-      message: "トレーニング内容を読み取れませんでした。例: 「ベンチプレス 60kg 10回 3セット」",
-    };
-  }
+  if (!parsed.exercises || parsed.exercises.length === 0) return [];
 
-  // AIパース結果は旧形式相当 → 正規化して保存
-  const normalized = parsed.exercises.map((e) => normalizeExercise(e));
+  return parsed.exercises.map((e) => {
+    const ex = normalizeExercise(e);
+    return ex.setGroups.length > 0
+      ? ex
+      : { ...ex, setGroups: [{ weight: null, reps: null, sets: null }] };
+  });
+}
 
+// 自重種目の判定。これらは weight が null でも欠損として扱わない（聞き返さない）。
+const BODYWEIGHT_EXERCISE_PATTERN =
+  /プッシュアップ|腕立て|チンニング|懸垂|プルアップ|ディップス|クランチ|プランク|レッグレイズ|シットアップ|腹筋|アブローラー|ロシアンツイスト|バーピー|バックエクステンション/;
+
+export function isBodyweightExercise(name: string): boolean {
+  return BODYWEIGHT_EXERCISE_PATTERN.test(name);
+}
+
+/** パース結果の欠損1箇所（聞き返しの最小単位） */
+export interface MissingField {
+  exerciseIndex: number;
+  groupIndex: number;
+  exerciseName: string;
+  field: "weight" | "reps" | "sets";
+}
+
+/**
+ * パース結果から欠損フィールドを列挙する。
+ * 順序は「種目の登場順 × weight → reps → sets」で固定（聞き返しの再現性のため）。
+ * 自重種目の weight は欠損に数えない。
+ */
+export function detectMissingFields(exercises: Exercise[]): MissingField[] {
+  const missing: MissingField[] = [];
+  exercises.forEach((ex, exerciseIndex) => {
+    const bodyweight = isBodyweightExercise(ex.name);
+    (ex.setGroups ?? []).forEach((g, groupIndex) => {
+      if (!bodyweight && g.weight == null) {
+        missing.push({ exerciseIndex, groupIndex, exerciseName: ex.name, field: "weight" });
+      }
+      if (g.reps == null) {
+        missing.push({ exerciseIndex, groupIndex, exerciseName: ex.name, field: "reps" });
+      }
+      if (g.sets == null) {
+        missing.push({ exerciseIndex, groupIndex, exerciseName: ex.name, field: "sets" });
+      }
+    });
+  });
+  return missing;
+}
+
+/**
+ * Exercise[] を保存し、ユーザー向けサマリーメッセージを返す。
+ * 自然文パース経路（即保存・聞き返し完了の両方）が使う。
+ */
+export async function saveWorkout(
+  userId: string,
+  exercises: Exercise[],
+  notes: string
+): Promise<{ message: string }> {
   const workout: WorkoutRecord = {
     date: admin.firestore.Timestamp.now(),
-    exercises: normalized,
-    notes: text,
+    exercises,
+    notes,
   };
 
   await db()
@@ -110,7 +162,7 @@ export async function parseAndSaveWorkout(
     .collection("workouts")
     .add(workout);
 
-  const summary = normalized
+  const summary = exercises
     .map((e) => {
       const lines = [e.name];
       e.setGroups.forEach((g) => {
@@ -124,10 +176,7 @@ export async function parseAndSaveWorkout(
     })
     .join("\n");
 
-  return {
-    exercises: normalized,
-    message: `記録しました！\n\n${summary}\n\nお疲れ様でした！`,
-  };
+  return { message: `記録しました！\n\n${summary}\n\nお疲れ様でした！` };
 }
 
 // プロンプトインジェクション/データ汚染対策: 種目名のサニタイズ
@@ -227,6 +276,25 @@ export async function getWorkoutsByMonth(
     .orderBy("date", "desc")
     .get();
 
+  return snapshot.docs.map((doc) => normalizeWorkoutRecord(doc.data() as WorkoutRecord));
+}
+
+/**
+ * 指定日数以内（過去 days 日）のワークアウト記録を新しい順で返す。
+ * 分析の「週区切り」集計（直近7日のスナップショット）が使う。
+ */
+export async function getWorkoutsSince(
+  userId: string,
+  days: number
+): Promise<WorkoutRecord[]> {
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const snapshot = await db()
+    .collection("users")
+    .doc(userId)
+    .collection("workouts")
+    .where("date", ">=", admin.firestore.Timestamp.fromDate(since))
+    .orderBy("date", "desc")
+    .get();
   return snapshot.docs.map((doc) => normalizeWorkoutRecord(doc.data() as WorkoutRecord));
 }
 

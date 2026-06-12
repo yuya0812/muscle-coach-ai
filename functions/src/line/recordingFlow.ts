@@ -1,18 +1,33 @@
 import * as admin from "firebase-admin";
 import * as line from "@line/bot-sdk";
 import { replyMessages, pushMessages, createWorkoutConfirmFlexMessage } from "./messages";
-import { saveWorkoutDirectly, getTotalWorkoutCount, Exercise } from "../workout/recorder";
-import { buildAnalysis, analysisKindForMilestone } from "../ai/analysis";
+import {
+  saveWorkoutDirectly,
+  saveWorkout,
+  getTotalWorkoutCount,
+  Exercise,
+  MissingField,
+} from "../workout/recorder";
+import { buildAnalysis } from "../ai/analysis";
 
 // LINE メッセージの送信者表示名（旧トレーナーキャラ名の代わりに固定のサービス名）
 const APP_SENDER_NAME = "マッスルコーチ";
 
+/** 自然文パースの聞き返し中に保留しているレコード（離脱時は破棄され保存されない） */
+interface PendingClarification {
+  exercises: Exercise[];
+  notes: string;
+  /** 残りの質問キュー（先頭が現在の質問） */
+  questions: MissingField[];
+}
+
 interface RecordingState {
-  step: "category" | "exercise" | "weight" | "reps" | "sets";
+  step: "category" | "exercise" | "weight" | "reps" | "sets" | "clarify";
   category?: string;
   exercise?: string;
   weight?: number | null;
   reps?: number | null;
+  pending?: PendingClarification;
   updatedAt: FirebaseFirestore.Timestamp;
 }
 
@@ -43,10 +58,8 @@ async function generateMilestoneContent(
   userId: string,
   milestoneCount: number
 ): Promise<string | null> {
-  const kind = analysisKindForMilestone(milestoneCount);
-  if (!kind) return null;
   try {
-    return await buildAnalysis(userId, kind, milestoneCount);
+    return await buildAnalysis(userId, milestoneCount);
   } catch (err) {
     console.error("Milestone content generation error:", err);
     return null;
@@ -147,7 +160,7 @@ export async function startRecordingFlow(
   await setRecordingState(userId, { step: "category" });
 
   const categories = Object.keys(EXERCISES_BY_CATEGORY);
-  const msg = buildTextWithQuickReply("部位を選んでください 💪", [
+  const msg = buildTextWithQuickReply("部位を選んでください", [
     ...categories,
     "キャンセル",
   ]);
@@ -181,9 +194,130 @@ export async function handleRecordingStep(
       return handleReps(userId, replyToken, text, state);
     case "sets":
       return handleSets(userId, replyToken, text, state);
+    case "clarify":
+      return handleClarifyStep(userId, replyToken, text, state);
     default:
       return false;
   }
+}
+
+// ============================================================
+// 自然文パースの聞き返し（不足情報の補完）
+// ============================================================
+
+/** 1メッセージあたりの聞き返し上限。これを超える欠損は聞き返さず案内に倒す。 */
+export const MAX_CLARIFY_QUESTIONS = 2;
+
+/**
+ * 聞き返しフローを開始する。保留レコードをステートに置き、最初の質問を push する。
+ * （webhook の record 経路は進捗 reply で replyToken を消費済みのため push を使う）
+ */
+export async function startClarification(
+  userId: string,
+  exercises: Exercise[],
+  notes: string,
+  questions: MissingField[]
+): Promise<void> {
+  await setRecordingState(userId, {
+    step: "clarify",
+    pending: { exercises, notes, questions },
+  });
+  await pushMessages(userId, [buildClarifyQuestion(questions[0])]);
+}
+
+function buildClarifyQuestion(q: MissingField): line.messagingApi.TextMessage {
+  switch (q.field) {
+    case "weight":
+      return buildTextWithQuickReply(
+        `「${q.exerciseName}」の重量は何kgでしたか？\n数字で送ってください（例: 60）。自重ならボタンを押してください。`,
+        ["自重", "キャンセル"]
+      );
+    case "reps":
+      return buildTextWithQuickReply(`「${q.exerciseName}」は何回やりましたか？`, [
+        "5回", "8回", "10回", "12回", "15回", "20回", "キャンセル",
+      ]);
+    case "sets":
+      return buildTextWithQuickReply(`「${q.exerciseName}」は何セットやりましたか？`, [
+        "1セット", "2セット", "3セット", "4セット", "5セット", "キャンセル",
+      ]);
+  }
+}
+
+/**
+ * 聞き返しへの回答を解釈する。
+ * - 解釈できた場合: weight は number | null（「自重」→ null）、reps/sets は number
+ * - 解釈できない場合: undefined（= 離脱とみなして保留を破棄する）
+ */
+function interpretClarifyAnswer(
+  field: MissingField["field"],
+  text: string
+): number | null | undefined {
+  const trimmed = text.trim();
+  if (field === "weight" && trimmed === "自重") return null;
+
+  // 単位表記（kg/キロ/回/セット）を取り除き、純粋な数値だけを回答として受け付ける。
+  // 文章中の数字（例「昨日60kgの話だけど」や新しい記録報告）を誤って回答扱いしないため。
+  const stripped = trimmed.replace(/(kg|キロ|回|レップ|rep|セット|set)$/i, "").trim();
+  if (!/^\d+(\.\d+)?$/.test(stripped)) return undefined;
+
+  const n = Number(stripped);
+  const max = field === "weight" ? 1000 : field === "reps" ? 1000 : 100;
+  if (!Number.isFinite(n) || n <= 0 || n > max) return undefined;
+
+  return field === "weight" ? n : Math.floor(n);
+}
+
+/**
+ * 聞き返しの1ステップを処理する。
+ * 回答なら保留レコードに反映し、次の質問 or 完了保存へ。
+ * 回答と解釈できないメッセージなら保留を黙って破棄し false を返す
+ * （webhook 側がそのメッセージを通常処理に流す。中途半端な記録は保存しない）。
+ */
+async function handleClarifyStep(
+  userId: string,
+  replyToken: string,
+  text: string,
+  state: RecordingState
+): Promise<boolean> {
+  const pending = state.pending;
+  if (!pending || pending.questions.length === 0) {
+    await clearRecordingState(userId);
+    return false;
+  }
+
+  const q = pending.questions[0];
+  const answer = interpretClarifyAnswer(q.field, text);
+  if (answer === undefined) {
+    // 離脱: 保留レコードを破棄（保存しない・警告も出さない）
+    await clearRecordingState(userId);
+    return false;
+  }
+
+  const group = pending.exercises[q.exerciseIndex]?.setGroups?.[q.groupIndex];
+  if (!group) {
+    await clearRecordingState(userId);
+    return false;
+  }
+  group[q.field] = answer;
+
+  const rest = pending.questions.slice(1);
+  if (rest.length > 0) {
+    await setRecordingState(userId, {
+      step: "clarify",
+      pending: { ...pending, questions: rest },
+    });
+    await replyMessages(replyToken, [buildClarifyQuestion(rest[0])]);
+    return true;
+  }
+
+  // 全質問に回答済み → 保存（「記録しました」は保存成功時のみ送る）
+  const { message } = await saveWorkout(userId, pending.exercises, pending.notes);
+  await clearRecordingState(userId);
+  await replyMessages(replyToken, [
+    { type: "text", text: message, sender: { name: APP_SENDER_NAME } } as line.messagingApi.Message,
+  ]);
+  await checkAndPushMilestone(userId);
+  return true;
 }
 
 async function handleCategory(
@@ -194,7 +328,7 @@ async function handleCategory(
   const exercises = EXERCISES_BY_CATEGORY[text];
   if (!exercises) {
     const categories = Object.keys(EXERCISES_BY_CATEGORY);
-    const msg = buildTextWithQuickReply("部位を選んでください 💪", [
+    const msg = buildTextWithQuickReply("部位を選んでください", [
       ...categories,
       "キャンセル",
     ]);

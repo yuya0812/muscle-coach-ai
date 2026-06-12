@@ -4,9 +4,23 @@ import { classifyIntent, USAGE_GUIDE } from "../ai/trainer";
 import { buildAnalysis } from "../ai/analysis";
 import { formatGreeting, formatForLine } from "../ai/formatter";
 import { getOrCreateUser, incrementUsage } from "../user/manager";
-import { getRecentWorkouts, formatWorkoutHistory, parseAndSaveWorkout, getTotalWorkoutCount } from "../workout/recorder";
+import {
+  getRecentWorkouts,
+  formatWorkoutHistory,
+  parseWorkoutText,
+  detectMissingFields,
+  saveWorkout,
+  getTotalWorkoutCount,
+  countWorkoutsSince,
+} from "../workout/recorder";
 import { replyMessages, pushMessages, createMenuFlexMessage } from "./messages";
-import { startRecordingFlow, handleRecordingStep, checkAndPushMilestone } from "./recordingFlow";
+import {
+  startRecordingFlow,
+  handleRecordingStep,
+  checkAndPushMilestone,
+  startClarification,
+  MAX_CLARIFY_QUESTIONS,
+} from "./recordingFlow";
 
 // LINE メッセージの送信者表示名（旧トレーナーキャラ名の代わりに固定のサービス名を使う）
 const APP_SENDER_NAME = "マッスルコーチ";
@@ -142,19 +156,39 @@ async function handleEvent(event: line.WebhookEvent): Promise<void> {
     return;
   }
 
-  // 記録意図：自然文（例「腹筋10回×3セット」）を直接パースして Firestore に保存する。
-  // 必ずパース → 保存 → サマリー返却 → マイルストーンチェックの順に処理する。
+  // 記録意図：自然文（例「腹筋10回×3セット」）をパースし、欠損の有無で分岐する。
+  // - 欠損なし → 即保存 → サマリー返却 → マイルストーンチェック
+  // - 欠損が聞き返し上限（2問）以内 → 保留して聞き返し開始（保存はまだしない）
+  // - 欠損が上限超 → 保存せず入力例を案内（中途半端な記録は残さない）
   if (intent === "record") {
     await replyMessages(replyToken, [buildMsg("記録を読み取っています。", sender)]);
     try {
-      const result = await parseAndSaveWorkout(userId, text);
-      await pushMessages(userId, [buildMsg(result.message, sender)]);
-      // 記録が1件以上保存できた場合のみマイルストーン判定（5/15/30回到達時にレポート push）
-      if (result.exercises.length > 0) {
+      const exercises = await parseWorkoutText(text);
+      if (exercises.length === 0) {
+        await pushMessages(userId, [
+          buildMsg("トレーニング内容を読み取れませんでした。例: 「ベンチプレス 60kg 10回 3セット」", sender),
+        ]);
+        return;
+      }
+
+      const missing = detectMissingFields(exercises);
+      if (missing.length === 0) {
+        const { message } = await saveWorkout(userId, exercises, text);
+        await pushMessages(userId, [buildMsg(message, sender)]);
         await checkAndPushMilestone(userId);
+      } else if (missing.length <= MAX_CLARIFY_QUESTIONS) {
+        await startClarification(userId, exercises, text, missing);
+      } else {
+        await pushMessages(userId, [
+          buildMsg(
+            "重量・回数・セット数のわからない箇所が多かったため、今回は記録しませんでした。\n" +
+              "「ベンチプレス 60kg 10回 3セット」のように、重量・回数・セット数を入れて送ってください。",
+            sender,
+          ),
+        ]);
       }
     } catch (error) {
-      console.error("[Record intent] parseAndSaveWorkout error:", error);
+      console.error("[Record intent] parse/save error:", error);
       await pushMessages(userId, [
         buildMsg("記録の保存に失敗しました。もう一度お試しください。", sender),
       ]);
@@ -199,6 +233,26 @@ async function runAnalysis(
     return;
   }
 
+  // 分析は週区切り（直近7日が軸）。今週の記録がなければ AI を呼ばず、課金もしない。
+  // 最終記録日を添えて再開を促す（記録が空いたユーザーが常にここに来るため）。
+  const thisWeekCount = await countWorkoutsSince(userId, 7);
+  if (thisWeekCount === 0) {
+    const recent = await getRecentWorkouts(userId, 1);
+    const daysAgo =
+      recent.length > 0
+        ? Math.max(0, Math.floor((Date.now() - recent[0].date.toDate().getTime()) / (24 * 60 * 60 * 1000)))
+        : null;
+    const lastLine = daysAgo != null ? `最後の記録は${daysAgo}日前です。` : "";
+    await replyMessages(replyToken, [
+      buildMsg(
+        `今週はまだ記録がありません。${lastLine}\n` +
+          "今週のトレーニングを記録してから「分析して」と送ってください。",
+        sender,
+      ),
+    ]);
+    return;
+  }
+
   // 利用回数チェック + 連投クールダウン（記録があるユーザーにのみ課金判定する）
   const usage = await incrementUsage(userId);
   if (!usage.allowed) {
@@ -212,7 +266,7 @@ async function runAnalysis(
 
   await replyMessages(replyToken, [buildMsg("記録を集計しています。少し待っていてください。", sender)]);
   try {
-    const text = await buildAnalysis(userId, "overview");
+    const text = await buildAnalysis(userId);
     if (!text) {
       // 記録はあるのに集計できなかった例外的ケース。案内だけ返す。
       await pushMessages(userId, [

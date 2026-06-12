@@ -4,10 +4,10 @@
  * 種目別に最大重量・典型レップ・典型セット数を集計したサマリーを返す。
  */
 
-import { getRecentWorkouts, totalVolumeOf } from "./recorder";
+import { getRecentWorkouts, getWorkoutsSince, totalVolumeOf } from "./recorder";
 
 const MUSCLE_GROUPS = ["chest", "back", "legs", "shoulders", "arms", "core"] as const;
-type MuscleGroup = typeof MUSCLE_GROUPS[number];
+export type MuscleGroup = typeof MUSCLE_GROUPS[number];
 
 // よくある種目名から部位を推定する（完全網羅ではないが、メニュー組成のヒントとしては十分）
 const EXERCISE_TO_MUSCLE: Array<[RegExp, MuscleGroup]> = [
@@ -225,6 +225,44 @@ export function formatWorkoutHistoryForPrompt(summary: WorkoutHistorySummary): s
   }
 
   return lines.join("\n") + "\n";
+}
+
+// ============================================================
+// 週次スナップショット（直近7日）
+// ============================================================
+
+/**
+ * 直近7日間の記録スナップショット。
+ * 分析の「週区切り」（今週なにをやったか）の土台。判定はすべてコードで行う。
+ */
+export interface WeeklySnapshot {
+  /** 直近7日のセッション数（0なら「今週はまだ記録なし」） */
+  sessions: number;
+  muscleTouchCounts: Record<MuscleGroup, number>;
+  /** 直近7日で刺激のなかった部位（固定の部位順） */
+  untouchedMuscles: MuscleGroup[];
+}
+
+export async function buildWeeklySnapshot(userId: string): Promise<WeeklySnapshot> {
+  const records = await getWorkoutsSince(userId, 7);
+
+  const muscleTouchCounts: Record<MuscleGroup, number> = {
+    chest: 0, back: 0, legs: 0, shoulders: 0, arms: 0, core: 0,
+  };
+
+  for (const record of records) {
+    for (const ex of record.exercises) {
+      const group = detectMuscleGroup(ex.name);
+      // 既存サマリー（buildWorkoutHistorySummary）と同じ判定基準で数える
+      if (group && totalVolumeOf(ex) > 0) muscleTouchCounts[group] += 1;
+    }
+  }
+
+  return {
+    sessions: records.length,
+    muscleTouchCounts,
+    untouchedMuscles: MUSCLE_GROUPS.filter((g) => muscleTouchCounts[g] === 0),
+  };
 }
 
 // ============================================================

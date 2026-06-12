@@ -2,7 +2,7 @@
  * AIトレーナーエンジン（方針転換後）
  *
  * AIの用途は2つだけ:
- *  1. 雑な入力 → 構造化記録（recorder.ts の parseAndSaveWorkout、webhook 側で直接処理）
+ *  1. 雑な入力 → 構造化記録（recorder.ts の parseWorkoutText/saveWorkout、webhook 側で直接処理）
  *  2. 記録の集計・分析 → コード集計 + AI言語化（analysis.ts）
  *
  * メニュー生成・フォーム指導・栄養相談・一般コーチング会話（正解のない生成）は廃止した。
@@ -48,7 +48,7 @@ export async function getTrainerResponse(
     case "record":
     case "other":
     default:
-      // record は本来 webhook 側で parseAndSaveWorkout に流れる。ここに来た場合や
+      // record は本来 webhook 側でパース・保存処理に流れる。ここに来た場合や
       // 雑談・質問は、記録の使い方を案内する。
       return [USAGE_GUIDE];
   }
@@ -60,7 +60,7 @@ export async function getTrainerResponse(
  */
 async function handleAnalysis(userId: string): Promise<string[]> {
   try {
-    const text = await buildAnalysis(userId, "overview");
+    const text = await buildAnalysis(userId);
     if (!text) {
       return [
         "まだ分析できる記録がありません。\n" +

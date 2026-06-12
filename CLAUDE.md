@@ -47,10 +47,19 @@
   再現性のある用途にAIを限定することで、「同じ記録なら同じ分析」を保証する。
 
 **実装の核:**
-- 記録パース: `functions/src/workout/recorder.ts`（`parseAndSaveWorkout` / `saveWorkoutDirectly`）
-- 集計: `functions/src/workout/history.ts`（部位タッチ数・最大重量・成長トレンド `buildGrowthTrend`）
-- 分析の言語化: `functions/src/ai/analysis.ts`（`buildAnalysis`）+ `ANALYSIS_VERBALIZE_PROMPT`
-  （数値の捏造を厳禁。マイルストーン・通常分析・週次レポートで共通利用）
+- 記録パース: `functions/src/workout/recorder.ts`（`parseWorkoutText` → 欠損検出
+  `detectMissingFields` → `saveWorkout`。LIFF 経由は `saveWorkoutDirectly`）
+- 聞き返し: 欠損が2問以内なら `recordingFlow.ts` の clarify ステートで Quick Reply 補完。
+  離脱（回答以外のメッセージ）で保留は破棄され、中途半端な記録は保存しない。
+  自重種目（`isBodyweightExercise`）は重量を聞かない。
+  詳細は [docs/spec/record-clarification.md](docs/spec/record-clarification.md)
+- 集計: `functions/src/workout/history.ts`（部位タッチ数・最大重量・成長トレンド
+  `buildGrowthTrend`・週次スナップショット `buildWeeklySnapshot`）
+- 分析: `functions/src/ai/analysis.ts`。ハイライト選定（`selectHighlights`、各セクション
+  上限つき）までコードが行い、AI は固定4セクション（弱点/伸びているところ/
+  伸び悩んでいるところ/次のステップ）の言語化のみ（`ANALYSIS_VERBALIZE_PROMPT`、捏造厳禁）。
+  通常分析・週次レポートは週区切り（直近7日が軸）、マイルストーンは全期間集計。
+  詳細は [docs/spec/analysis-highlight-format.md](docs/spec/analysis-highlight-format.md)
 
 ---
 
