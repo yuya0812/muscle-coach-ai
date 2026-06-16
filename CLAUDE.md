@@ -201,6 +201,18 @@ URLなし $0.015/件・URL含む $0.20/件 で、本プロジェクトは**本�
 [autoPost.ts](functions/src/x/autoPost.ts) の `stripUrls()` がモデルの逸脱を投稿前に除去する保険。これを外すと月コストが跳ねるので注意。
 クレジットは X Developer Portal で事前チャージ。残高はそこで監視する。
 
+### 🟡 X自動投稿は1日3回。noon/evening が間欠的に 403 する（観察中・2026-06）
+morning(7:00)/noon(12:00)/evening(20:00) の1日3回投稿。noon・evening が
+`403 Forbidden`（"You are not permitted to perform this action"）で弾かれることがあるが、
+「3回とも成功する日もある」ため固定的なプラン上限ではなく**間欠的な失敗**と判断。
+各関数に `retryCount: 2` を付けて拾い直す方針で運用・観察している。
+`xPostLogs` は成功・失敗の両方を記録する（doc ID = `YYYY-MM-DD_<timing>`、`status` フィールドで区別）。
+冪等性: 同じ `YYYY-MM-DD_<timing>` が success 済みならリトライ時もスキップ（二重投稿しない）。
+失敗の傾向を見るときは xPostLogs の `status: failed` の `errorCode`/`errorMessage`、または
+Cloud Logging の `[AutoPost <timing>] X API failed` を見る。
+投稿本文は方針転換後の世界観（雑にLINEへ送れば記録／AIが弱点・伸びを言語化）に合わせてある。
+メニュー提案・フォーム指導など廃止機能を匂わせる文言を入れないこと。
+
 ### 🟡 LIFF SDK は HTTPSドメインでのみ動作
 ローカル開発時は `liff-app` を `npm run dev` した URL を LIFF Endpoint に登録するか、LIFF Inspector を使う。
 
