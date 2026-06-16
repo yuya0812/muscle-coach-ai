@@ -21,6 +21,16 @@ export const theme = {
     goldBorder:   'rgba(232, 184, 0, 0.22)',
     blue:         '#3b82f6',
   },
+  // 計器盤トーンの質感トークン。カード上面の微光ハイライトと内側の沈み込みで、
+  // ダーク基調のまま「精密機器」のような奥行きを出す（濃い影・グラデは使わない）。
+  effects: {
+    // カード上端の白微光（::before や box-shadow inset で使う）
+    topHighlight: 'inset 0 1px 0 rgba(255, 255, 255, 0.05)',
+    // 数値計器ブロックの軽い浮き上がり
+    cardLift: '0 1px 0 rgba(255, 255, 255, 0.04), 0 8px 24px -16px rgba(0, 0, 0, 0.6)',
+    // チャットバブル風要素の縁
+    bubbleEdge: 'inset 0 1px 0 rgba(255, 255, 255, 0.06)',
+  },
   spacing: {
     xs:  '4px',
     sm:  '8px',

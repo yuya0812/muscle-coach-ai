@@ -7,9 +7,10 @@ export interface TourStep {
 
 export const TOUR_STEPS: TourStep[] = [
   // Dashboard
-  { path: '/dashboard', target: 'dashboard-summary', title: '今週・今月の状況', body: '今週のトレーニング回数と、今月のAI相談の残り回数がここに表示されます。' },
-  { path: '/dashboard', target: 'dashboard-ai-card', title: 'AIコーチに相談', body: 'タップすると LINE に戻り、AIコーチとチャットできます。メニュー提案やフォーム相談に使ってください。' },
-  { path: '/dashboard', target: 'dashboard-milestone', title: 'マイルストーン', body: '記録を続けるほど、AIによる弱点分析・成長トレンド・プログラム最適化が解放されます。' },
+  { path: '/dashboard', target: 'dashboard-summary', title: '今週・今月の状況', body: '今週のトレーニング回数と、今月のAI分析の残り回数がここに表示されます。' },
+  { path: '/dashboard', target: 'dashboard-record-cta', title: 'LINEでサッと記録', body: '「ベンチプレス 60kg 10回 3セット」のようにLINEへ送るだけで記録されます。足りない情報はその場で聞き返します。' },
+  { path: '/dashboard', target: 'dashboard-analysis', title: '分析サマリー', body: '弱点・伸びている種目・伸び悩み・次の一歩を、記録の集計から自動でまとめます。文章での分析はLINEで「分析して」と送ると届きます。' },
+  { path: '/dashboard', target: 'dashboard-milestone', title: 'マイルストーン', body: '記録を続けるほど、AIによる弱点分析・成長トレンド・パターン分析が解放されます。' },
   { path: '/dashboard', target: 'dashboard-charts', title: 'グラフで成長を見る', body: '部位別バランスと重量推移をグラフで確認できます。期間タブで表示範囲を切り替えられます。' },
 
   // Workout Input
@@ -23,14 +24,13 @@ export const TOUR_STEPS: TourStep[] = [
   { path: '/workout-log', target: 'log-calendar', title: 'カレンダー', body: '記録のある日には緑のドットが付きます。日付をタップすると、その日の詳細が下に表示されます。' },
 
   // Profile
-  { path: '/profile', target: 'profile-trainer-name', title: 'トレーナー名', body: 'AIコーチに呼ばせたい名前を設定できます。空欄ならデフォルト名になります。' },
-  { path: '/profile', target: 'profile-options', title: '目標・レベル・器具', body: 'AIのアドバイスをあなたに最適化するための情報です。途中でも変更できます。' },
+  { path: '/profile', target: 'profile-options', title: '目標・レベル・器具', body: '記録の分析をあなたに最適化するための情報です。途中でも変更できます。' },
   { path: '/profile', target: 'profile-notifications', title: '通知設定', body: '日次リマインダーと週次レポートのオン/オフを切り替えられます。' },
   { path: '/profile', target: 'profile-save', title: '設定を保存', body: '変更したら必ず保存ボタンをタップしてください。' },
 
   // Subscribe
   { path: '/subscribe', target: 'subscribe-plan', title: '現在のプラン', body: '今のあなたのプラン状態がここに表示されます。' },
-  { path: '/subscribe', target: 'subscribe-cta', title: 'プレミアムを試す', body: '最初の1週間は無料でお試し可能。AI相談無制限・週次レポートなどが解放されます。' },
+  { path: '/subscribe', target: 'subscribe-cta', title: 'プレミアムを試す', body: '最初の1週間は無料でお試し可能。AI分析無制限・週次レポートなどが解放されます。' },
 
   // BottomNav (last)
   { path: '/dashboard', target: 'nav-bar', title: '画面切替はここから', body: '5つのタブで画面を切り替えられます。次回からあなた専用のホーム画面として使ってください。' },

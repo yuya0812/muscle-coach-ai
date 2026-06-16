@@ -19,6 +19,7 @@ import { sendScheduledNotifications } from "./notifications/scheduledNotificatio
 import { autoPostMorning, autoPostNoon, autoPostEvening } from "./x/autoPost";
 import { createAndSetDefaultRichMenu } from "./line/richMenu";
 import { checkAndPushMilestone } from "./line/recordingFlow";
+import { buildAnalysisHighlights } from "./ai/analysis";
 
 admin.initializeApp();
 
@@ -432,6 +433,36 @@ export const api = onRequest(
           achieved: totalCount >= m.count,
         }));
         res.json({ totalCount, milestones });
+        return;
+      }
+
+      // 分析サマリー（ダッシュボード表示用）。
+      // AI は呼ばず、コード集計したハイライト（弱点/伸び/伸び悩み/次のステップ）を返す。
+      // 課金・レイテンシなし。LINE の「分析して」（AI言語化）とは役割分担（同じ確定値が源）。
+      if (req.method === "GET" && (path === "/api/analysis-summary" || path === "/analysis-summary")) {
+        const userId = req.query.userId as string;
+        if (!userId) { res.status(400).json({ error: "Missing userId" }); return; }
+        const h = await buildAnalysisHighlights(userId);
+        if (!h) {
+          res.json({ hasRecords: false });
+          return;
+        }
+        res.json({
+          hasRecords: true,
+          weekSessions: h.weekSessions,
+          totalRecords: h.totalRecords,
+          weakpoints: h.weakpoints,
+          improved: h.improved.map((e) => ({
+            name: e.name,
+            earlyMaxWeight: e.earlyMaxWeight,
+            recentMaxWeight: e.recentMaxWeight,
+            earlyTypicalReps: e.earlyTypicalReps,
+            recentTypicalReps: e.recentTypicalReps,
+          })),
+          stagnant: h.stagnant,
+          trendJudgeable: h.trendJudgeable,
+          nextStep: h.nextStep,
+        });
         return;
       }
 

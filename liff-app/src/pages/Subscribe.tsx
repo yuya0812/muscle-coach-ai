@@ -224,10 +224,10 @@ const LegalLinkArrow = styled.span`
 `
 
 const PREMIUM_FEATURES = [
-  'AIパーソナルトレーナーの無制限利用（フリーは月5回）',
+  'AI分析の無制限利用（フリーは月5回）',
   '週次AIレポート自動送信（月曜朝に届く）',
   '日次リマインダー・週次レポート通知',
-  '目標別パーソナルトレーニングプログラム作成',
+  '記録の集計から弱点・成長トレンドを言語化',
 ]
 
 export default function Subscribe({ userId }: { userId: string }) {

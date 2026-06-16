@@ -190,7 +190,7 @@ export default function Onboarding({ userId }: { userId: string }) {
           </svg>
         </HeroIcon>
         <HeroTitle>{`マッスルコーチAIへ\nようこそ！`}</HeroTitle>
-        <HeroSub>AIがあなた専属のパーソナルトレーナーになります</HeroSub>
+        <HeroSub>LINEに送るだけで記録、AIが分析まで言語化します</HeroSub>
       </Hero>
 
       <SectionLabel>使い方</SectionLabel>
@@ -200,12 +200,12 @@ export default function Onboarding({ userId }: { userId: string }) {
           <FlowHeader $accent={theme.colors.primary}>
             <FlowNum $accent={theme.colors.primary}>01</FlowNum>
             <FlowDivider $accent={theme.colors.primary} />
-            <FlowTitle>LINE でAIコーチと会話</FlowTitle>
+            <FlowTitle>LINE に送るだけで記録</FlowTitle>
           </FlowHeader>
           <FlowItems>
-            <FlowItem>今日のメニューを提案してもらう</FlowItem>
-            <FlowItem>フォームや重量のアドバイスをもらう</FlowItem>
-            <FlowItem>停滞期の打開策を相談する</FlowItem>
+            <FlowItem>「ベンチプレス 60kg 10回 3セット」と送る</FlowItem>
+            <FlowItem>足りない情報はその場で聞き返します</FlowItem>
+            <FlowItem>「分析して」で弱点・伸びをまとめて受け取る</FlowItem>
           </FlowItems>
         </FlowCard>
 
@@ -213,10 +213,10 @@ export default function Onboarding({ userId }: { userId: string }) {
           <FlowHeader $accent={theme.colors.blue}>
             <FlowNum $accent={theme.colors.blue}>02</FlowNum>
             <FlowDivider $accent={theme.colors.blue} />
-            <FlowTitle>このアプリでデータ管理</FlowTitle>
+            <FlowTitle>このアプリでデータを見る</FlowTitle>
           </FlowHeader>
           <FlowItems>
-            <FlowItem>トレーニングを記録する</FlowItem>
+            <FlowItem>弱点・成長を分析サマリーで確認する</FlowItem>
             <FlowItem>グラフで成長を振り返る</FlowItem>
             <FlowItem>プランの確認・変更をする</FlowItem>
           </FlowItems>
@@ -226,7 +226,7 @@ export default function Onboarding({ userId }: { userId: string }) {
       <Nudge>
         <NudgeText>まずヒアリングを始めましょう</NudgeText>
         <NudgeSub>
-          年代・体格・目標などをいくつか教えてください。AIのアドバイスがあなた専用に最適化されます（60秒程度）。
+          年代・体格・目標などをいくつか教えてください。記録の分析があなたの目標に合わせて調整されます（60秒程度）。
         </NudgeSub>
         <PrimaryButton onClick={goToSetup}>
           セットアップを始める →

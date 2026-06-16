@@ -211,16 +211,19 @@ function buildAnalysisData(h: AnalysisHighlights): string {
 }
 
 /**
- * 分析を実行して、ユーザー向けの言語化テキストを返す。
- * 集計・選定はコード、言語化のみ AI。記録が無い場合は null を返す（呼び出し側で分岐）。
+ * 集計 → ハイライト選定までをコードだけで行い、AnalysisHighlights を返す。
+ * AI を一切呼ばない（無料・低レイテンシ）。記録が無い場合は null。
+ *
+ * ダッシュボードの「分析サマリー」（事実の要点表示）と、buildAnalysis（AI言語化）の
+ * 両方がこれを使う。両者が同じ確定値を源にすることで内容の食い違いを防ぐ。
  *
  * @param milestoneCount マイルストーン経路のときは到達回数を渡す（通常分析では null）。
- *   マイルストーンは全期間集計、通常分析・週次レポートは週次スナップショットを軸にする。
+ *   マイルストーンは全期間集計、通常分析・週次スナップショットを軸にする。
  */
-export async function buildAnalysis(
+export async function buildAnalysisHighlights(
   userId: string,
   milestoneCount: number | null = null,
-): Promise<string | null> {
+): Promise<AnalysisHighlights | null> {
   const limit = milestoneCount ?? 30;
   const [summary, trend, weekly, profile] = await Promise.all([
     buildWorkoutHistorySummary(userId, limit),
@@ -233,7 +236,22 @@ export async function buildAnalysis(
 
   if (!summary.hasRecords) return null;
 
-  const highlights = selectHighlights(summary, trend, weekly, profile, milestoneCount);
+  return selectHighlights(summary, trend, weekly, profile, milestoneCount);
+}
+
+/**
+ * 分析を実行して、ユーザー向けの言語化テキストを返す。
+ * 集計・選定はコード、言語化のみ AI。記録が無い場合は null を返す（呼び出し側で分岐）。
+ *
+ * @param milestoneCount マイルストーン経路のときは到達回数を渡す（通常分析では null）。
+ */
+export async function buildAnalysis(
+  userId: string,
+  milestoneCount: number | null = null,
+): Promise<string | null> {
+  const highlights = await buildAnalysisHighlights(userId, milestoneCount);
+  if (!highlights) return null;
+
   const analysisData = buildAnalysisData(highlights);
 
   const client = getAnthropicClient();

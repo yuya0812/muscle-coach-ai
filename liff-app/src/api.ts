@@ -77,13 +77,13 @@ export async function getProfile(userId: string): Promise<ProfileData> {
 }
 
 // プロフィール更新（セットアップ追加項目もこのエンドポイントで送れる）
+// trainerName/trainerType は方針転換でトレーナーキャラを廃止したため送らない
+// （Firestore のフィールド自体は既存ユーザー保護のため残置）。
 export interface ProfileUpdateInput {
   goal?: string
   level?: string
   equipment?: string[]
   frequency?: number
-  trainerName?: string
-  trainerType?: string
   birthYearRange?: string
   sex?: string
   heightCm?: number | null
@@ -218,6 +218,30 @@ export interface MilestoneStatus {
 
 export async function getMilestones(userId: string): Promise<MilestoneStatus> {
   return request(`/api/milestones?userId=${userId}`)
+}
+
+// 分析サマリー（ダッシュボード表示用・AI不使用の事実ベース）
+export interface AnalysisImprovedItem {
+  name: string
+  earlyMaxWeight: number | null
+  recentMaxWeight: number | null
+  earlyTypicalReps: number | null
+  recentTypicalReps: number | null
+}
+
+export interface AnalysisSummary {
+  hasRecords: boolean
+  weekSessions?: number | null
+  totalRecords?: number
+  weakpoints?: string[]
+  improved?: AnalysisImprovedItem[]
+  stagnant?: string[]
+  trendJudgeable?: boolean
+  nextStep?: string
+}
+
+export async function getAnalysisSummary(userId: string): Promise<AnalysisSummary> {
+  return request(`/api/analysis-summary?userId=${userId}`)
 }
 
 // ユーザーが過去に手入力した種目名を取得（クイック選択候補）

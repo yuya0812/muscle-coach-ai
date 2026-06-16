@@ -519,7 +519,7 @@ export default function Setup({ userId }: { userId: string }) {
       <StepShell
         step={2}
         title="トレーニング"
-        subtitle="あなたに合うメニューや強度を判断します。"
+        subtitle="記録の分析をあなたの目標に合わせるための情報です。"
         canNext={canNext}
         canBack
         onBack={() => setStep(1)}
@@ -585,7 +585,7 @@ export default function Setup({ userId }: { userId: string }) {
               </ChoiceButton>
             ))}
           </ButtonGrid>
-          <FieldHint>複数選択OK。AIがあなたの優先部位を考慮してメニューを提案します。</FieldHint>
+          <FieldHint>複数選択OK。分析であなたの重点部位として扱われます。</FieldHint>
         </FieldGroup>
       </StepShell>
     )

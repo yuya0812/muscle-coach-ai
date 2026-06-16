@@ -357,12 +357,6 @@ const HintText = styled.p`
   line-height: 1.5;
 `
 
-const TRAINER_TYPES = [
-  { value: 'hot', label: '熱血コウ' },
-  { value: 'science', label: 'ドクターK' },
-  { value: 'buddy', label: 'アキラ先輩' },
-]
-
 const GOALS = [
   { value: 'hypertrophy', label: '筋肥大' },
   { value: 'diet', label: 'ダイエット' },
@@ -429,8 +423,6 @@ export default function Profile({ userId }: { userId: string }) {
   const navigate = useNavigate()
 
   // 編集中の値
-  const [trainerName, setTrainerName] = useState('')
-  const [trainerType, setTrainerType] = useState('hot')
   const [goal, setGoal] = useState('hypertrophy')
   const [level, setLevel] = useState('beginner')
   const [equipment, setEquipment] = useState<string[]>(['bodyweight'])
@@ -474,8 +466,6 @@ export default function Profile({ userId }: { userId: string }) {
           setEquipment(Array.isArray(d.profile.equipment) ? d.profile.equipment : [d.profile.equipment])
         }
         if (d.profile?.frequency) setFrequency(d.profile.frequency)
-        if (d.profile?.trainerName) setTrainerName(d.profile.trainerName)
-        if (d.profile?.trainerType) setTrainerType(d.profile.trainerType)
         if (d.profile?.birthYearRange) setBirthYearRange(d.profile.birthYearRange)
         if (d.profile?.sex) setSex(d.profile.sex)
         if (d.profile?.heightCm) setHeightCm(String(d.profile.heightCm))
@@ -503,7 +493,7 @@ export default function Profile({ userId }: { userId: string }) {
         if (d.settings?.autoSendAnalysisMessage) {
           setAutoSendAnalysisMessage(d.settings.autoSendAnalysisMessage)
         }
-        const initialized = !!(d.profile?.trainerName || d.profile?.goal)
+        const initialized = !!d.profile?.goal
         setHasInitialData(initialized)
         if (!initialized) {
           setProfileMode('edit')
@@ -535,8 +525,6 @@ export default function Profile({ userId }: { userId: string }) {
           level,
           equipment,
           frequency,
-          trainerName: trainerName || undefined,
-          trainerType,
           birthYearRange: birthYearRange || undefined,
           sex: sex || undefined,
           heightCm: heightCm ? Number(heightCm) : null,
@@ -670,11 +658,9 @@ export default function Profile({ userId }: { userId: string }) {
   const profileSection = profileMode === 'view' && hasInitialData ? (
     <Card>
       <SectionHeader>
-        <SectionLabel>トレーナー / 目標</SectionLabel>
+        <SectionLabel>目標 / トレーニング</SectionLabel>
         <EditButton onClick={() => setProfileMode('edit')}>編集</EditButton>
       </SectionHeader>
-      <ViewRow><ViewLabel>トレーナー名</ViewLabel><ViewValue>{trainerName || '(未設定)'}</ViewValue></ViewRow>
-      <ViewRow><ViewLabel>キャラクター</ViewLabel><ViewValue>{labelOf(TRAINER_TYPES, trainerType)}</ViewValue></ViewRow>
       <ViewRow><ViewLabel>目標</ViewLabel><ViewValue>{labelOf(GOALS, goal)}</ViewValue></ViewRow>
       <ViewRow><ViewLabel>レベル</ViewLabel><ViewValue>{labelOf(LEVELS, level)}</ViewValue></ViewRow>
       <ViewRow>
@@ -686,29 +672,9 @@ export default function Profile({ userId }: { userId: string }) {
   ) : (
     <Card>
       <SectionHeader>
-        <SectionLabel>トレーナー / 目標</SectionLabel>
+        <SectionLabel>目標 / トレーニング</SectionLabel>
         {hasInitialData && <EditButton onClick={() => setProfileMode('view')}>キャンセル</EditButton>}
       </SectionHeader>
-      <Label>トレーナー名</Label>
-      <TextInput
-        data-tour-id="profile-trainer-name"
-        type="text"
-        value={trainerName}
-        onChange={(e) => setTrainerName(e.target.value.slice(0, 20))}
-        placeholder="例：コウ、田中トレーナー など"
-        maxLength={20}
-      />
-      <HintText>LINEのメッセージに表示される名前です（空欄ならキャラ別のデフォルト名）</HintText>
-
-      <Label>トレーナーキャラクター</Label>
-      <OptionGrid style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
-        {TRAINER_TYPES.map((t) => (
-          <OptionButton key={t.value} $selected={trainerType === t.value} onClick={() => setTrainerType(t.value)}>
-            {t.label}
-          </OptionButton>
-        ))}
-      </OptionGrid>
-
       <Label>トレーニングの目標</Label>
       <OptionGrid data-tour-id="profile-options">
         {GOALS.map((g) => (

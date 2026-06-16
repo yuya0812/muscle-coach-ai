@@ -14,8 +14,8 @@ import {
 } from 'chart.js'
 import { Line, Radar } from 'react-chartjs-2'
 import { theme } from '../theme'
-import { getDashboardData, getUsageStatus, getMilestones, type DashboardData, type MilestoneStatus } from '../api'
-import { closeLiff } from '../liff'
+import { getDashboardData, getUsageStatus, getMilestones, getAnalysisSummary, type DashboardData, type MilestoneStatus, type AnalysisSummary } from '../api'
+import { closeLiff, sendMessageAndCloseLiff } from '../liff'
 import Loading from '../components/Loading'
 
 ChartJS.register(
@@ -108,7 +108,8 @@ const GoldUnit = styled.span`
   opacity: 0.85;
 `
 
-const AiCard = styled.div`
+// ===== 記録導線カード（LINEでサッと記録） =====
+const RecordCard = styled.div`
   position: relative;
   overflow: hidden;
   background: ${theme.colors.surface};
@@ -116,28 +117,17 @@ const AiCard = styled.div`
   border-radius: 18px;
   padding: 18px;
   margin-bottom: ${theme.spacing.md};
+  box-shadow: ${theme.effects.cardLift};
 `
 
-const AiDecor = styled.div`
-  position: absolute;
-  top: -40px;
-  right: -40px;
-  width: 120px;
-  height: 120px;
-  border-radius: 50%;
-  background: ${theme.colors.primaryDim};
-  pointer-events: none;
-`
-
-const AiHeader = styled.div`
+const RecordHeader = styled.div`
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 12px;
-  position: relative;
+  margin-bottom: 14px;
 `
 
-const AiIconBox = styled.div`
+const RecordIconBox = styled.div`
   width: 38px;
   height: 38px;
   border-radius: 11px;
@@ -149,62 +139,130 @@ const AiIconBox = styled.div`
   flex-shrink: 0;
 `
 
-const AiTitleBlock = styled.div`
+const RecordTitleBlock = styled.div`
   display: flex;
   flex-direction: column;
 `
 
-const AiTitle = styled.span`
+const RecordTitle = styled.span`
   font-size: 14px;
   font-weight: 700;
   color: ${theme.colors.text};
 `
 
-const AiSub = styled.span`
+const RecordSub = styled.span`
   font-size: 11.5px;
   color: ${theme.colors.textMuted};
 `
 
-const AiExamples = styled.ul`
-  list-style: none;
-  padding: 0;
-  margin: 0 0 14px;
+// LINEのトークを模したチャットバブル（「こう送ればいい」を体験的に見せる）
+const ChatBubble = styled.div`
+  align-self: flex-end;
+  max-width: 88%;
+  margin: 0 0 14px auto;
+  background: ${theme.colors.primary};
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+  padding: 10px 13px;
+  border-radius: 14px 14px 4px 14px;
+  box-shadow: ${theme.effects.bubbleEdge};
+`
+
+const RecordActions = styled.div`
   display: flex;
-  flex-direction: column;
-  gap: 6px;
-  position: relative;
+  gap: 8px;
 `
 
-const AiExample = styled.li`
-  background: ${theme.colors.surface2};
-  border: 1px solid ${theme.colors.border};
-  border-radius: 9px;
-  padding: 8px 12px;
-  font-size: 12px;
-  color: ${theme.colors.textMuted};
-`
-
-const AiButton = styled.button`
-  width: 100%;
-  padding: 13px 16px;
+const RecordPrimaryBtn = styled.button`
+  flex: 1;
+  padding: 13px 14px;
   background: ${theme.colors.primary};
   color: #fff;
   border: none;
   border-radius: 12px;
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 700;
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  position: relative;
   &:active { opacity: 0.85; }
 `
 
-const AiButtonRemain = styled.span`
-  font-size: 12px;
+const RecordGhostBtn = styled.button`
+  flex: 1;
+  padding: 13px 14px;
+  background: transparent;
+  color: ${theme.colors.primary};
+  border: 1.5px solid ${theme.colors.primaryBorder};
+  border-radius: 12px;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  &:active { background: ${theme.colors.primaryDim}; }
+`
+
+// ===== 分析サマリーカード（4セクション・計器盤） =====
+const AnalysisCard = styled.div`
+  background: ${theme.colors.surface};
+  border: 1px solid ${theme.colors.border};
+  border-radius: 18px;
+  padding: 16px 18px;
+  margin-bottom: ${theme.spacing.md};
+  box-shadow: ${theme.effects.cardLift};
+`
+
+const AnalysisHead = styled.div`
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 14px;
+`
+
+const AnalysisTitle = styled.span`
+  font-size: 13px;
+  font-weight: 700;
+  color: ${theme.colors.text};
+`
+
+const AnalysisHint = styled.span`
+  font-size: 10.5px;
+  color: ${theme.colors.textMuted};
+`
+
+const AnalysisGrid = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+`
+
+const AnalysisRow = styled.div<{ $accent: string }>`
+  border: 1px solid ${theme.colors.border};
+  border-left: 3px solid ${({ $accent }) => $accent};
+  border-radius: 10px;
+  background: ${theme.colors.surface2};
+  padding: 9px 12px;
+`
+
+const AnalysisRowLabel = styled.div<{ $accent: string }>`
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: ${({ $accent }) => $accent};
+  margin-bottom: 3px;
+`
+
+const AnalysisRowValue = styled.div`
+  font-size: 13px;
   font-weight: 600;
-  opacity: 0.85;
+  color: ${theme.colors.text};
+  line-height: 1.5;
+`
+
+const AnalysisEmpty = styled.p`
+  font-size: 12.5px;
+  color: ${theme.colors.textMuted};
+  line-height: 1.6;
+  margin: 4px 0 0;
 `
 
 const MilestoneCard = styled.div`
@@ -463,6 +521,7 @@ export default function Dashboard({ userId }: { userId: string }) {
   const [error, setError] = useState(false)
   const [remaining, setRemaining] = useState<number | null | undefined>(undefined)
   const [milestones, setMilestones] = useState<MilestoneStatus | null>(null)
+  const [analysis, setAnalysis] = useState<AnalysisSummary | null>(null)
 
   const fetchData = (initial = false) => {
     if (initial) setLoading(true)
@@ -492,6 +551,12 @@ export default function Dashboard({ userId }: { userId: string }) {
     getMilestones(userId)
       .then(setMilestones)
       .catch(() => setMilestones(null))
+  }, [userId])
+
+  useEffect(() => {
+    getAnalysisSummary(userId)
+      .then(setAnalysis)
+      .catch(() => setAnalysis(null))
   }, [userId])
 
   if (loading) return <Loading />
@@ -597,33 +662,85 @@ export default function Dashboard({ userId }: { userId: string }) {
         )}
       </SummaryRow>
 
-      <AiCard data-tour-id="dashboard-ai-card">
-        <AiDecor />
-        <AiHeader>
-          <AiIconBox>
+      <RecordCard data-tour-id="dashboard-record-cta">
+        <RecordHeader>
+          <RecordIconBox>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={theme.colors.primary} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="11" width="18" height="10" rx="2"/>
-              <circle cx="12" cy="5" r="2"/>
-              <path d="M12 7v4"/>
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
             </svg>
-          </AiIconBox>
-          <AiTitleBlock>
-            <AiTitle>AIコーチに相談する</AiTitle>
-            <AiSub>LINEで何でも聞ける専属トレーナー</AiSub>
-          </AiTitleBlock>
-        </AiHeader>
-        <AiExamples>
-          <AiExample>今日のトレーニングメニューを提案して</AiExample>
-          <AiExample>ベンチプレスのフォームを教えて</AiExample>
-          <AiExample>停滞を打開する方法が知りたい</AiExample>
-        </AiExamples>
-        <AiButton onClick={closeLiff}>
-          <span>LINEでAIコーチに話しかける</span>
-          <AiButtonRemain>
-            {remaining === null ? '無制限' : remaining !== undefined ? `残り${remaining}回` : ''}
-          </AiButtonRemain>
-        </AiButton>
-      </AiCard>
+          </RecordIconBox>
+          <RecordTitleBlock>
+            <RecordTitle>LINEでサッと記録</RecordTitle>
+            <RecordSub>送るだけで記録、足りない分は聞き返します</RecordSub>
+          </RecordTitleBlock>
+        </RecordHeader>
+        <ChatBubble>ベンチプレス 60kg 10回 3セット</ChatBubble>
+        <RecordActions>
+          <RecordPrimaryBtn onClick={closeLiff}>LINEで記録する</RecordPrimaryBtn>
+          <RecordGhostBtn onClick={() => sendMessageAndCloseLiff('分析して')}>
+            分析してもらう
+          </RecordGhostBtn>
+        </RecordActions>
+      </RecordCard>
+
+      {analysis && (
+        <AnalysisCard data-tour-id="dashboard-analysis">
+          <AnalysisHead>
+            <AnalysisTitle>分析サマリー</AnalysisTitle>
+            <AnalysisHint>記録の集計から自動でまとめています</AnalysisHint>
+          </AnalysisHead>
+          {!analysis.hasRecords ? (
+            <AnalysisEmpty>
+              記録がたまると、弱点・伸びている種目・次の一歩がここに表示されます。
+              まずはLINEに「ベンチプレス 60kg 10回 3セット」のように送ってみてください。
+            </AnalysisEmpty>
+          ) : (
+            <AnalysisGrid>
+              <AnalysisRow $accent={theme.colors.textMuted}>
+                <AnalysisRowLabel $accent={theme.colors.textMuted}>弱点</AnalysisRowLabel>
+                <AnalysisRowValue>
+                  {analysis.weakpoints && analysis.weakpoints.length > 0
+                    ? `${analysis.weakpoints.join('・')}の刺激が不足`
+                    : '部位バランスに大きな偏りなし'}
+                </AnalysisRowValue>
+              </AnalysisRow>
+
+              <AnalysisRow $accent={theme.colors.primary}>
+                <AnalysisRowLabel $accent={theme.colors.primary}>伸びているところ</AnalysisRowLabel>
+                <AnalysisRowValue>
+                  {!analysis.trendJudgeable
+                    ? 'まだ判定できる記録が足りません'
+                    : analysis.improved && analysis.improved.length > 0
+                    ? analysis.improved
+                        .map((e) =>
+                          e.recentMaxWeight != null && e.earlyMaxWeight != null
+                            ? `${e.name}（${e.earlyMaxWeight}→${e.recentMaxWeight}kg）`
+                            : e.name,
+                        )
+                        .join('、')
+                    : '明確に伸びている種目はまだありません'}
+                </AnalysisRowValue>
+              </AnalysisRow>
+
+              <AnalysisRow $accent={theme.colors.gold}>
+                <AnalysisRowLabel $accent={theme.colors.gold}>伸び悩んでいるところ</AnalysisRowLabel>
+                <AnalysisRowValue>
+                  {!analysis.trendJudgeable
+                    ? 'まだ判定できる記録が足りません'
+                    : analysis.stagnant && analysis.stagnant.length > 0
+                    ? analysis.stagnant.join('、')
+                    : '該当なし'}
+                </AnalysisRowValue>
+              </AnalysisRow>
+
+              <AnalysisRow $accent={theme.colors.primary}>
+                <AnalysisRowLabel $accent={theme.colors.primary}>次のステップ</AnalysisRowLabel>
+                <AnalysisRowValue>{analysis.nextStep}</AnalysisRowValue>
+              </AnalysisRow>
+            </AnalysisGrid>
+          )}
+        </AnalysisCard>
+      )}
 
       {milestones && (
         <MilestoneCard data-tour-id="dashboard-milestone">
