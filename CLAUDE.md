@@ -153,14 +153,39 @@ cd functions && npm run build && cd .. && firebase deploy --only functions
 # 特定Functionのみ
 firebase deploy --only functions:api,functions:lineWebhook
 
-# フロントエンドのみ
+# フロントエンドのみ（hosting は単独でデプロイすること。下記の注意を参照）
 cd liff-app && npm run build && cd .. && firebase deploy --only hosting
 
 # Firestoreルール
 firebase deploy --only firestore:rules
 ```
 
-**注意:** [firebase.json](firebase.json) のhosting設定は `public/` を見ているが、liff-app は `liff-app/dist` にビルドされる。本番デプロイ前に hosting source を見直すこと（本番フェーズで対応予定）。
+### 🔴 hosting は単独でデプロイする（一括指定で live が更新されない事故が2回発生）
+
+`firebase deploy --only hosting,functions:...` のように **hosting を関数と一括指定すると、
+hosting の `finalizing version` / `releasing new version` が走らず live チャンネルが
+更新されないこと**がこのプロジェクトで2回起きた（2026-06-18 / 2026-06-27）。
+「file upload complete」までは出るので一見成功に見えるが、本番は旧 JS を配信し続ける。
+
+**対策:** hosting は必ず単独で実行する。
+```bash
+cd liff-app && npm run build && cd ..
+firebase deploy --only hosting   # 単独。ここで finalizing→releasing→release complete まで出ることを確認
+```
+
+**デプロイ後の検証（hosting を更新したら必ず実施）:**
+```bash
+# live の最終リリース時刻が今のものに更新されているか
+firebase hosting:channel:list | grep live
+# 本番が配信している JS が最新ビルドのファイル名か（public/index.html の参照と一致するか）
+curl -s "https://muscle-coach-ai.web.app/" | grep -oE 'assets/index-[A-Za-z0-9._-]+\.js'
+ls public/assets/ | grep index   # 上の curl 結果とファイル名が一致すれば反映OK
+```
+ファイル名が食い違っていたら未反映。`firebase deploy --only hosting` を単独で再実行する。
+
+**補足:** vite の outDir は `../public`（[liff-app/vite.config.ts](liff-app/vite.config.ts)）。
+firebase.json の hosting public も `public`。`npm run build` すると public が最新成果物に
+置き換わる（public はビルド成果物なので .gitignore 対象）。
 
 ---
 
