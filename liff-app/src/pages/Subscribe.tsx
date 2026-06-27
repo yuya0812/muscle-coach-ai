@@ -227,7 +227,7 @@ const PREMIUM_FEATURES = [
   'AI分析の無制限利用（フリーは月5回）',
   '週次AIレポート自動送信（月曜朝に届く）',
   '日次リマインダー・週次レポート通知',
-  '記録の集計から弱点・成長トレンドを言語化',
+  '記録の集計から成長トレンド・続けられている種目を言語化',
 ]
 
 export default function Subscribe({ userId }: { userId: string }) {

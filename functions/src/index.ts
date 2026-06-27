@@ -424,14 +424,13 @@ export const api = onRequest(
         if (!userId) { res.status(400).json({ error: "Missing userId" }); return; }
         const totalCount = await getTotalWorkoutCount(userId);
         const MILESTONES = [
-          { count: 5, name: "弱点部位レポート", emoji: "🔍" },
-          { count: 15, name: "成長トレンド分析", emoji: "📈" },
-          { count: 30, name: "プログラム最適化", emoji: "⚡" },
+          { count: 5, name: "はじめての振り返り" },
+          { count: 15, name: "成長トレンド分析" },
+          { count: 30, name: "トレーニング全体の傾向" },
         ];
         const milestones = MILESTONES.map((m) => ({
           count: m.count,
           name: m.name,
-          emoji: m.emoji,
           achieved: totalCount >= m.count,
         }));
         res.json({ totalCount, milestones });
@@ -453,7 +452,6 @@ export const api = onRequest(
           hasRecords: true,
           weekSessions: h.weekSessions,
           totalRecords: h.totalRecords,
-          weakpoints: h.weakpoints,
           improved: h.improved.map((e) => ({
             name: e.name,
             earlyMaxWeight: e.earlyMaxWeight,
@@ -461,9 +459,12 @@ export const api = onRequest(
             earlyTypicalReps: e.earlyTypicalReps,
             recentTypicalReps: e.recentTypicalReps,
           })),
+          consistent: h.consistent,
           stagnant: h.stagnant,
           trendJudgeable: h.trendJudgeable,
           nextStep: h.nextStep,
+          untouchedUnlocked: h.untouchedUnlocked,
+          untouched: h.untouched,
         });
         return;
       }

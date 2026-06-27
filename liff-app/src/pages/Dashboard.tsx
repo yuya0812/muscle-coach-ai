@@ -265,6 +265,23 @@ const AnalysisEmpty = styled.p`
   margin: 4px 0 0;
 `
 
+const UntouchedNote = styled.div`
+  font-size: 11px;
+  color: ${theme.colors.textMuted};
+  margin-top: 4px;
+`
+
+const UntouchedToggle = styled.button`
+  margin-top: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${theme.colors.primary};
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+`
+
 const MilestoneCard = styled.div`
   background: ${theme.colors.surface};
   border: 1px solid ${theme.colors.border};
@@ -522,6 +539,8 @@ export default function Dashboard({ userId }: { userId: string }) {
   const [remaining, setRemaining] = useState<number | null | undefined>(undefined)
   const [milestones, setMilestones] = useState<MilestoneStatus | null>(null)
   const [analysis, setAnalysis] = useState<AnalysisSummary | null>(null)
+  // 「最近やっていない種目」は解放後もデフォルト非表示。ユーザーが見たいときだけ開く。
+  const [showUntouched, setShowUntouched] = useState(false)
 
   const fetchData = (initial = false) => {
     if (initial) setLoading(true)
@@ -691,20 +710,11 @@ export default function Dashboard({ userId }: { userId: string }) {
           </AnalysisHead>
           {!analysis.hasRecords ? (
             <AnalysisEmpty>
-              記録がたまると、弱点・伸びている種目・次の一歩がここに表示されます。
+              記録がたまると、伸びている種目や次の一歩がここに表示されます。
               まずはLINEに「ベンチプレス 60kg 10回 3セット」のように送ってみてください。
             </AnalysisEmpty>
           ) : (
             <AnalysisGrid>
-              <AnalysisRow $accent={theme.colors.textMuted}>
-                <AnalysisRowLabel $accent={theme.colors.textMuted}>弱点</AnalysisRowLabel>
-                <AnalysisRowValue>
-                  {analysis.weakpoints && analysis.weakpoints.length > 0
-                    ? `${analysis.weakpoints.join('・')}の刺激が不足`
-                    : '部位バランスに大きな偏りなし'}
-                </AnalysisRowValue>
-              </AnalysisRow>
-
               <AnalysisRow $accent={theme.colors.primary}>
                 <AnalysisRowLabel $accent={theme.colors.primary}>伸びているところ</AnalysisRowLabel>
                 <AnalysisRowValue>
@@ -718,7 +728,16 @@ export default function Dashboard({ userId }: { userId: string }) {
                             : e.name,
                         )
                         .join('、')
-                    : '明確に伸びている種目はまだありません'}
+                    : '続けていること自体が前進です'}
+                </AnalysisRowValue>
+              </AnalysisRow>
+
+              <AnalysisRow $accent={theme.colors.primary}>
+                <AnalysisRowLabel $accent={theme.colors.primary}>続けられている種目</AnalysisRowLabel>
+                <AnalysisRowValue>
+                  {analysis.consistent && analysis.consistent.length > 0
+                    ? analysis.consistent.join('、')
+                    : 'これから軸になる種目がたまっていきます'}
                 </AnalysisRowValue>
               </AnalysisRow>
 
@@ -737,6 +756,27 @@ export default function Dashboard({ userId }: { userId: string }) {
                 <AnalysisRowLabel $accent={theme.colors.primary}>次のステップ</AnalysisRowLabel>
                 <AnalysisRowValue>{analysis.nextStep}</AnalysisRowValue>
               </AnalysisRow>
+
+              {analysis.untouchedUnlocked && (
+                <AnalysisRow $accent={theme.colors.textMuted}>
+                  <AnalysisRowLabel $accent={theme.colors.textMuted}>最近やっていない種目（任意）</AnalysisRowLabel>
+                  <AnalysisRowValue>
+                    {showUntouched ? (
+                      <>
+                        {analysis.untouched && analysis.untouched.length > 0
+                          ? analysis.untouched.join('・')
+                          : '最近離れている種目はありません'}
+                        <UntouchedNote>やる・やらないはあなた次第です。</UntouchedNote>
+                        <UntouchedToggle onClick={() => setShowUntouched(false)}>隠す</UntouchedToggle>
+                      </>
+                    ) : (
+                      <UntouchedToggle onClick={() => setShowUntouched(true)}>
+                        見る（必要なときだけでOK）
+                      </UntouchedToggle>
+                    )}
+                  </AnalysisRowValue>
+                </AnalysisRow>
+              )}
             </AnalysisGrid>
           )}
         </AnalysisCard>

@@ -2,11 +2,13 @@
  * トレーニング記録の分析（コード集計 + ハイライト選定 + AI言語化）
  *
  * 設計の核心:
- * - 「弱点」「伸び」「伸び悩み」の判定はすべてコード(history.ts + selectHighlights)が行う。
+ * - 「伸び」「継続」「伸び悩み」の判定はすべてコード(history.ts + selectHighlights)が行う。
+ * - 部位の網羅性で責める「弱点」は廃止。やっている種目の伸び・継続を主役にする。
+ *   「最近やっていない種目」は累計30回到達で解放される任意情報（責めない中立表現）。
  * - 「分析に何を載せるか」（ハイライト選定）もコードが決める。各セクションに上限を設け、
  *   優先度の高い項目だけを AI に渡す。
- * - AI は渡された確定値を固定4セクション（弱点/伸びているところ/伸び悩んでいるところ/
- *   次のステップ）の日本語にするだけ（数値の捏造を禁止）。
+ * - AI は渡された確定値を固定構成（伸び/続けられている種目/伸び悩み/次のステップ）の
+ *   日本語にするだけ（数値の捏造を禁止）。
  * - これにより「同じ記録からは実質同じ分析」が返る（再現性）。
  *
  * 集計範囲:
@@ -21,27 +23,18 @@ import {
   buildWorkoutHistorySummary,
   buildGrowthTrend,
   buildWeeklySnapshot,
+  untouchedExercises,
   type WorkoutHistorySummary,
   type GrowthTrend,
   type WeeklySnapshot,
   type ExerciseTrend,
-  type MuscleGroup,
 } from "../workout/history";
 
 const db = admin.firestore;
 
-const MUSCLE_LABEL: Record<string, string> = {
-  chest: "胸",
-  back: "背中",
-  legs: "脚",
-  shoulders: "肩",
-  arms: "腕",
-  core: "腹",
-};
-
-// セクションごとの掲載上限（spec: analysis-highlight-format.md の仮決定2）
-const MAX_WEAKPOINTS = 2;
+// セクションごとの掲載上限。
 const MAX_IMPROVED = 2;
+const MAX_CONSISTENT = 2;
 const MAX_STAGNANT = 2;
 
 interface ProfileLite {
@@ -59,6 +52,10 @@ async function getProfileLite(userId: string): Promise<ProfileLite> {
  * 分析に載せる内容（コードが確定的に選定した結果）。
  * AI はこの中身を言語化するだけで、追加・推測はしない。
  */
+// 「最近やっていない種目」の表示が解放される累計記録回数。
+// それまでは伸び中心の前向きな分析だけを見せ、網羅性で責めない（モチベ優先）。
+export const UNTOUCHED_UNLOCK_AT = 30;
+
 export interface AnalysisHighlights {
   /** マイルストーン経路なら到達回数、通常分析なら null */
   milestoneCount: number | null;
@@ -67,60 +64,64 @@ export interface AnalysisHighlights {
   totalRecords: number;
   lastWorkoutDaysAgo: number | null;
   goal?: string;
-  /** 弱点部位のラベル（最大2） */
-  weakpoints: string[];
-  /** 伸びている種目（最大2、改善幅順） */
+  /** 伸びている種目（最大2、改善幅順）。分析の主役。 */
   improved: ExerciseTrend[];
+  /** 安定して継続できている種目名（伸びの土台。最大2、実施回数順） */
+  consistent: string[];
   /** 伸び悩んでいる種目名（最大2、実施回数順） */
   stagnant: string[];
   /** トレンド判定に足るデータがあるか（false なら「まだ判定できない」を出す） */
   trendJudgeable: boolean;
   /** 次のステップ（1点のみ。優先順位ルールでコードが決める） */
   nextStep: string;
+  /** 「最近やっていない種目」表示が解放されているか（累計30回以上） */
+  untouchedUnlocked: boolean;
+  /** 最近やっていない種目名（解放後・任意表示用。最大3）。責めない中立表現で使う。 */
+  untouched: string[];
 }
 
 /**
  * 集計結果からハイライトを選定する。すべて確定的（同じ入力なら同じ出力）。
  *
- * - 弱点: 全期間で未刺激の部位を優先し、（通常分析では）今週未刺激の部位を
- *   全期間の刺激回数が少ない順で補充。最大2部位。
- * - 伸び: トレンドの improved から改善幅の大きい順に最大2種目。
+ * 方針: 部位の網羅性（未刺激＝弱点）で責めるのをやめ、ユーザーがやっている種目の
+ * 「伸び・継続・伸び悩み」を主役にする。「最近やっていない種目」は累計30回到達で
+ * 解放される任意情報として持たせる（表示するかは閲覧側がデフォルトOFFで制御）。
+ *
+ * - 伸び: トレンドの improved から改善幅の大きい順に最大2種目（主役）。
+ * - 継続: 実施回数の多い種目から最大2（伸びの土台として前向きに伝える）。
  * - 伸び悩み: トレンドの stagnant から実施回数の多い順に最大2種目。
- * - 次のステップ: 弱点 > 伸び悩み > 伸びの継続 > 記録継続 の優先順位で1点。
+ * - 次のステップ: 伸び悩み打開 > 伸びの継続 > 記録継続 の優先順位で1点（部位補強は出さない）。
+ * - 触れていない種目: 累計30回以上で解放。最後の実施から日が空いた種目を中立に拾う。
  */
 export function selectHighlights(
   summary: WorkoutHistorySummary,
   trend: GrowthTrend,
-  weekly: WeeklySnapshot | null,
+  _weekly: WeeklySnapshot | null,
   profile: ProfileLite,
   milestoneCount: number | null,
 ): AnalysisHighlights {
-  // 弱点候補: 全期間未刺激 → （通常分析のみ）今週未刺激を全期間刺激回数の少ない順で補充
-  const weakGroups: MuscleGroup[] = [...summary.underworkedMuscles];
-  if (weekly) {
-    const extras = weekly.untouchedMuscles
-      .filter((g) => !weakGroups.includes(g))
-      .sort((a, b) => summary.muscleTouchCounts[a] - summary.muscleTouchCounts[b]);
-    weakGroups.push(...extras);
-  }
-  const weakpoints = weakGroups.slice(0, MAX_WEAKPOINTS).map((g) => MUSCLE_LABEL[g] ?? g);
-
   const improved = trend.improved.slice(0, MAX_IMPROVED);
 
-  // 伸び悩みは「よくやっている種目」ほど伝える価値が高いので実施回数順
   const performedCount = new Map(
     summary.exerciseSummaries.map((s) => [s.name, s.timesPerformed]),
   );
+
+  // 継続できている種目（実施回数が多い順）。伸びの土台として前向きに伝える。
+  const improvedNames = new Set(improved.map((e) => e.name));
+  const consistent = summary.exerciseSummaries
+    .filter((s) => s.timesPerformed >= 2 && !improvedNames.has(s.name))
+    .slice(0, MAX_CONSISTENT)
+    .map((s) => s.name);
+
+  // 伸び悩みは「よくやっている種目」ほど伝える価値が高いので実施回数順
   const stagnant = [...trend.stagnant]
     .sort((a, b) => (performedCount.get(b.name) ?? 0) - (performedCount.get(a.name) ?? 0))
     .slice(0, MAX_STAGNANT)
     .map((e) => e.name);
 
-  // 次のステップ（1点のみ）
+  // 次のステップ（1点のみ）。未刺激部位の補強提案はしない（やらない種目があってOK）。
   let nextStep: string;
-  if (weakpoints.length > 0) {
-    nextStep = `次回のトレーニングに${weakpoints[0]}の種目を1つ入れる`;
-  } else if (stagnant.length > 0) {
+  if (stagnant.length > 0) {
     nextStep = `${stagnant[0]}の重量か回数を、どちらか一段だけ上げてみる`;
   } else if (improved.length > 0) {
     nextStep = `${improved[0].name}は伸びているので、今のペースを継続する`;
@@ -128,23 +129,29 @@ export function selectHighlights(
     nextStep = "まずは記録を続けて、比較できるデータをためる";
   }
 
+  const untouchedUnlocked = summary.totalRecords >= UNTOUCHED_UNLOCK_AT;
+  const untouched = untouchedUnlocked ? untouchedExercises(summary) : [];
+
   return {
     milestoneCount,
-    weekSessions: weekly ? weekly.sessions : null,
+    weekSessions: _weekly ? _weekly.sessions : null,
     totalRecords: summary.totalRecords,
     lastWorkoutDaysAgo: summary.lastWorkoutDaysAgo,
     goal: profile.goal,
-    weakpoints,
     improved,
+    consistent,
     stagnant,
     trendJudgeable: trend.hasEnoughData,
     nextStep,
+    untouchedUnlocked,
+    untouched,
   };
 }
 
 /**
  * 選定済みハイライトを、AI に渡す「分析データ」テキストに変換する。
- * 固定4セクションの順序で渡し、空のセクションは「該当なし」等を明示する。
+ * 伸び中心の構成（伸び→継続→伸び悩み→次の一歩）で渡す。空のセクションは明示する。
+ * 「最近やっていない種目」は解放（累計30回）後のみ末尾に中立表現で付ける。
  */
 function buildAnalysisData(h: AnalysisHighlights): string {
   const lines: string[] = [];
@@ -163,15 +170,7 @@ function buildAnalysisData(h: AnalysisHighlights): string {
   if (h.goal) lines.push(`- ユーザーの目標: ${h.goal}`);
 
   lines.push("");
-  lines.push("### 弱点（コード判定）");
-  if (h.weakpoints.length > 0) {
-    for (const w of h.weakpoints) lines.push(`- ${w}: 刺激が不足している`);
-  } else {
-    lines.push("- 該当なし（部位バランスに大きな偏りなし）");
-  }
-
-  lines.push("");
-  lines.push("### 伸びているところ（コード判定）");
+  lines.push("### 伸びているところ（コード判定・最重要。前向きに伝える）");
   if (!h.trendJudgeable) {
     lines.push("- まだ判定できる記録が足りない（初期と最近を比較できない）");
   } else if (h.improved.length > 0) {
@@ -188,7 +187,15 @@ function buildAnalysisData(h: AnalysisHighlights): string {
       lines.push(`- ${e.name}${detail ? `（${detail}）` : ""}`);
     }
   } else {
-    lines.push("- 該当なし（明確に伸びている種目はない）");
+    lines.push("- 明確に伸びている種目はまだないが、続けていること自体が前進");
+  }
+
+  lines.push("");
+  lines.push("### 続けられている種目（コード判定・継続を称える）");
+  if (h.consistent.length > 0) {
+    lines.push(`- ${h.consistent.join("・")} を安定して継続できている`);
+  } else {
+    lines.push("- これから継続の軸になる種目がたまっていく段階");
   }
 
   lines.push("");
@@ -206,6 +213,14 @@ function buildAnalysisData(h: AnalysisHighlights): string {
   lines.push("");
   lines.push("### 次のステップ（コード判定・この1点のみ）");
   lines.push(`- ${h.nextStep}`);
+
+  // 「最近やっていない種目」は解放後のみ、参考情報として中立に渡す。
+  // 責めず、やる/やらないはユーザー次第というトーンを保つこと。
+  if (h.untouchedUnlocked && h.untouched.length > 0) {
+    lines.push("");
+    lines.push("### 参考: 最近やっていない種目（責めない。やるやらないは本人次第）");
+    lines.push(`- ${h.untouched.join("・")}`);
+  }
 
   return lines.join("\n");
 }

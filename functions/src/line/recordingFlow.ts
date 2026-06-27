@@ -43,9 +43,9 @@ const EXERCISES_BY_CATEGORY: Record<string, string[]> = {
 const db = admin.firestore;
 
 const MILESTONES = [
-  { count: 5, name: "弱点部位レポート" },
+  { count: 5, name: "はじめての振り返り" },
   { count: 15, name: "成長トレンド分析" },
-  { count: 30, name: "プログラム最適化" },
+  { count: 30, name: "トレーニング全体の傾向" },
 ];
 
 /**

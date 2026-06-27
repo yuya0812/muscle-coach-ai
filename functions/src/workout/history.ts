@@ -54,6 +54,27 @@ export interface WorkoutHistorySummary {
   lastWorkoutDaysAgo: number | null;
 }
 
+// 「最近やっていない種目」と判定する閾値（最後に実施してからの日数）。
+// 部位の網羅性ではなく、ユーザーが実際にやっている種目の中で「しばらく触れていない」
+// ものを中立に拾う（責めない方針）。
+const UNTOUCHED_EXERCISE_DAYS = 14;
+
+/**
+ * ユーザーが過去にやっていて、最近 UNTOUCHED_EXERCISE_DAYS 日以上やっていない種目名を返す。
+ * 「弱点（未刺激部位）」の代わりに使う、種目ベース・中立表現の「最近やっていない種目」。
+ * 実施回数が多い順（＝かつて主力だったのに離れている種目を優先）。
+ */
+export function untouchedExercises(
+  summary: WorkoutHistorySummary,
+  limit = 3,
+): string[] {
+  return summary.exerciseSummaries
+    .filter((e) => e.lastUsedDaysAgo >= UNTOUCHED_EXERCISE_DAYS)
+    .sort((a, b) => b.timesPerformed - a.timesPerformed)
+    .slice(0, limit)
+    .map((e) => e.name);
+}
+
 /**
  * ある種目の「初期 vs 最近」の重量・回数の変化。成長トレンド判定の最小単位。
  * すべてコード集計で算出する（AI に推測させない）。

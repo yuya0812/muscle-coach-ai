@@ -205,7 +205,7 @@ export default function Onboarding({ userId }: { userId: string }) {
           <FlowItems>
             <FlowItem>「ベンチプレス 60kg 10回 3セット」と送る</FlowItem>
             <FlowItem>足りない情報はその場で聞き返します</FlowItem>
-            <FlowItem>「分析して」で弱点・伸びをまとめて受け取る</FlowItem>
+            <FlowItem>「分析して」で伸び・続けられている種目をまとめて受け取る</FlowItem>
           </FlowItems>
         </FlowCard>
 
@@ -216,7 +216,7 @@ export default function Onboarding({ userId }: { userId: string }) {
             <FlowTitle>このアプリでデータを見る</FlowTitle>
           </FlowHeader>
           <FlowItems>
-            <FlowItem>弱点・成長を分析サマリーで確認する</FlowItem>
+            <FlowItem>成長・続けられている種目を分析サマリーで確認する</FlowItem>
             <FlowItem>グラフで成長を振り返る</FlowItem>
             <FlowItem>プランの確認・変更をする</FlowItem>
           </FlowItems>

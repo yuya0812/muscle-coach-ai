@@ -233,11 +233,15 @@ export interface AnalysisSummary {
   hasRecords: boolean
   weekSessions?: number | null
   totalRecords?: number
-  weakpoints?: string[]
   improved?: AnalysisImprovedItem[]
+  consistent?: string[]
   stagnant?: string[]
   trendJudgeable?: boolean
   nextStep?: string
+  // 「最近やっていない種目」は累計30回で解放。解放後もデフォルトは非表示で、
+  // ユーザーがトグルでONにしたときだけ表示する（責めない方針）。
+  untouchedUnlocked?: boolean
+  untouched?: string[]
 }
 
 export async function getAnalysisSummary(userId: string): Promise<AnalysisSummary> {

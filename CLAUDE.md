@@ -42,7 +42,7 @@
 
 **AIに任せること / 任せないこと（最重要）:**
 - AIに任せる: 自然言語の入出力変換だけ（雑な入力→構造化、集計済み数値→読みやすい文章）
-- AIに任せない: 判断・計算（弱点・伸び悩み・部位バランスはコードが集計し判定する）
+- AIに任せない: 判断・計算（伸び・継続・伸び悩みはコードが集計し判定する）
 - 理由: 「正解のない生成」は検証も再現もできずユーザーの信頼を損なう。入出力が検証可能で
   再現性のある用途にAIを限定することで、「同じ記録なら同じ分析」を保証する。
 
@@ -56,8 +56,11 @@
 - 集計: `functions/src/workout/history.ts`（部位タッチ数・最大重量・成長トレンド
   `buildGrowthTrend`・週次スナップショット `buildWeeklySnapshot`）
 - 分析: `functions/src/ai/analysis.ts`。ハイライト選定（`selectHighlights`、各セクション
-  上限つき）までコードが行い、AI は固定4セクション（弱点/伸びているところ/
+  上限つき）までコードが行い、AI は固定構成（伸びているところ/続けられている種目/
   伸び悩んでいるところ/次のステップ）の言語化のみ（`ANALYSIS_VERBALIZE_PROMPT`、捏造厳禁）。
+  **部位の網羅性で責める「弱点」は廃止**。やっている種目の伸び・継続を主役にする。
+  「最近やっていない種目」は累計30回到達で解放される任意情報（`UNTOUCHED_UNLOCK_AT`、
+  LIFFではデフォルト非表示のトグル、責めない中立表現）。
   通常分析・週次レポートは週区切り（直近7日が軸）、マイルストーンは全期間集計。
   詳細は [docs/spec/analysis-highlight-format.md](docs/spec/analysis-highlight-format.md)
 
@@ -210,7 +213,7 @@ morning(7:00)/noon(12:00)/evening(20:00) の1日3回投稿。noon・evening が
 冪等性: 同じ `YYYY-MM-DD_<timing>` が success 済みならリトライ時もスキップ（二重投稿しない）。
 失敗の傾向を見るときは xPostLogs の `status: failed` の `errorCode`/`errorMessage`、または
 Cloud Logging の `[AutoPost <timing>] X API failed` を見る。
-投稿本文は方針転換後の世界観（雑にLINEへ送れば記録／AIが弱点・伸びを言語化）に合わせてある。
+投稿本文は方針転換後の世界観（雑にLINEへ送れば記録／AIが伸び・継続を言語化）に合わせてある。
 メニュー提案・フォーム指導など廃止機能を匂わせる文言を入れないこと。
 
 ### 🟡 LIFF SDK は HTTPSドメインでのみ動作

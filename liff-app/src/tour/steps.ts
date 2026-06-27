@@ -9,8 +9,8 @@ export const TOUR_STEPS: TourStep[] = [
   // Dashboard
   { path: '/dashboard', target: 'dashboard-summary', title: '今週・今月の状況', body: '今週のトレーニング回数と、今月のAI分析の残り回数がここに表示されます。' },
   { path: '/dashboard', target: 'dashboard-record-cta', title: 'LINEでサッと記録', body: '「ベンチプレス 60kg 10回 3セット」のようにLINEへ送るだけで記録されます。足りない情報はその場で聞き返します。' },
-  { path: '/dashboard', target: 'dashboard-analysis', title: '分析サマリー', body: '弱点・伸びている種目・伸び悩み・次の一歩を、記録の集計から自動でまとめます。文章での分析はLINEで「分析して」と送ると届きます。' },
-  { path: '/dashboard', target: 'dashboard-milestone', title: 'マイルストーン', body: '記録を続けるほど、AIによる弱点分析・成長トレンド・パターン分析が解放されます。' },
+  { path: '/dashboard', target: 'dashboard-analysis', title: '分析サマリー', body: '伸びている種目・続けられている種目・伸び悩み・次の一歩を、記録の集計から自動でまとめます。文章での分析はLINEで「分析して」と送ると届きます。' },
+  { path: '/dashboard', target: 'dashboard-milestone', title: 'マイルストーン', body: '記録を続けるほど、成長トレンド分析や、記録全体の傾向が解放されます。' },
   { path: '/dashboard', target: 'dashboard-charts', title: 'グラフで成長を見る', body: '部位別バランスと重量推移をグラフで確認できます。期間タブで表示範囲を切り替えられます。' },
 
   // Workout Input
