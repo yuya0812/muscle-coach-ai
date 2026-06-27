@@ -17,7 +17,7 @@ import { authenticateRequest } from "./auth/verifyLiffToken";
 import { sendWeeklyReports } from "./reports/weeklyReport";
 import { sendScheduledNotifications } from "./notifications/scheduledNotifications";
 import { autoPostMorning, autoPostNoon, autoPostEvening } from "./x/autoPost";
-import { collectXMetrics, collectXMetricsScheduled } from "./x/metrics";
+import { collectXMetrics, collectXMetricsScheduled, aggregateXPerformance } from "./x/metrics";
 import { createAndSetDefaultRichMenu } from "./line/richMenu";
 import { checkAndPushMilestone } from "./line/recordingFlow";
 import { buildAnalysisHighlights } from "./ai/analysis";
@@ -511,6 +511,20 @@ export const api = onRequest(
         }
         const summary = await collectXMetrics();
         res.json({ success: !summary.error, ...summary });
+        return;
+      }
+
+      // X 投稿パフォーマンスの集計（運用の分析用、ADMIN_API_KEY 必須）。
+      // ctaVariant別・timing別のエンゲージメントと、伸びた投稿トップ5を返す。AIは使わない。
+      if (req.method === "GET" && (path === "/api/admin/x-performance" || path === "/admin/x-performance")) {
+        const adminKey = process.env.ADMIN_API_KEY;
+        const provided = req.headers["x-admin-key"] || (req.headers.authorization || "").replace(/^Bearer\s+/i, "");
+        if (!adminKey || provided !== adminKey) {
+          res.status(401).json({ error: "Unauthorized" });
+          return;
+        }
+        const perf = await aggregateXPerformance();
+        res.json(perf);
         return;
       }
 

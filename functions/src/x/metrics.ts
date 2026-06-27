@@ -136,6 +136,114 @@ export async function collectXMetrics(): Promise<{
   return { attempted: targets.length, updated };
 }
 
+/**
+ * xPostLogs を集計して X 投稿のパフォーマンスを返す（運用の分析用）。
+ * AI は使わず Firestore の集計のみ。手動トリガ /api/admin/x-performance から呼ぶ。
+ *
+ * 軸ごとの交絡に注意:
+ * - ctaVariant（CTAあり/なし）は週単位で分離されているので比較的クリーン → 主指標
+ * - timing（朝昼夜）・曜日テーマは ctaVariant や互いと交絡する → 参考値
+ * いずれもエンゲージメント率（likes/impressions, (likes+rt+reply)/impressions）で見る。
+ */
+export interface PerfBucket {
+  posts: number;
+  withMetrics: number;
+  impressions: number;
+  likes: number;
+  retweets: number;
+  replies: number;
+  /** likes / impressions（%表記の素の値） */
+  likeRate: number;
+  /** (likes+retweets+replies) / impressions */
+  engagementRate: number;
+}
+
+function emptyBucket(): PerfBucket {
+  return {
+    posts: 0, withMetrics: 0, impressions: 0, likes: 0, retweets: 0, replies: 0,
+    likeRate: 0, engagementRate: 0,
+  };
+}
+
+function finalizeBucket(b: PerfBucket): PerfBucket {
+  b.likeRate = b.impressions > 0 ? b.likes / b.impressions : 0;
+  b.engagementRate =
+    b.impressions > 0 ? (b.likes + b.retweets + b.replies) / b.impressions : 0;
+  return b;
+}
+
+export async function aggregateXPerformance(): Promise<{
+  totalSuccess: number;
+  totalWithMetrics: number;
+  failedCount: number;
+  byCtaVariant: Record<string, PerfBucket>;
+  byTiming: Record<string, PerfBucket>;
+  topPosts: Array<{ tweetText: string; ctaVariant: string; timing: string; impressions: number; likes: number }>;
+  note: string;
+}> {
+  const snapshot = await db().collection("xPostLogs").orderBy("postedAt", "desc").limit(500).get();
+
+  const byCtaVariant: Record<string, PerfBucket> = {};
+  const byTiming: Record<string, PerfBucket> = {};
+  const scored: Array<{ tweetText: string; ctaVariant: string; timing: string; impressions: number; likes: number }> = [];
+
+  let totalSuccess = 0;
+  let totalWithMetrics = 0;
+  let failedCount = 0;
+
+  for (const doc of snapshot.docs) {
+    const d = doc.data();
+    if (d.status === "failed") { failedCount += 1; continue; }
+    if (d.status !== "success") continue;
+    totalSuccess += 1;
+
+    const cta = (d.ctaVariant as string) ?? "unknown";
+    const timing = (d.timing as string) ?? "unknown";
+    byCtaVariant[cta] ??= emptyBucket();
+    byTiming[timing] ??= emptyBucket();
+    byCtaVariant[cta].posts += 1;
+    byTiming[timing].posts += 1;
+
+    const m = d.metrics as
+      | { impressionCount?: number; likeCount?: number; retweetCount?: number; replyCount?: number }
+      | undefined;
+    if (!m) continue;
+    totalWithMetrics += 1;
+
+    const imp = m.impressionCount ?? 0;
+    const likes = m.likeCount ?? 0;
+    const rt = m.retweetCount ?? 0;
+    const rep = m.replyCount ?? 0;
+
+    for (const b of [byCtaVariant[cta], byTiming[timing]]) {
+      b.withMetrics += 1;
+      b.impressions += imp;
+      b.likes += likes;
+      b.retweets += rt;
+      b.replies += rep;
+    }
+    scored.push({ tweetText: (d.tweetText as string) ?? "", ctaVariant: cta, timing, impressions: imp, likes });
+  }
+
+  for (const b of Object.values(byCtaVariant)) finalizeBucket(b);
+  for (const b of Object.values(byTiming)) finalizeBucket(b);
+
+  const topPosts = scored.sort((a, b) => b.likes - a.likes || b.impressions - a.impressions).slice(0, 5);
+
+  return {
+    totalSuccess,
+    totalWithMetrics,
+    failedCount,
+    byCtaVariant,
+    byTiming,
+    topPosts,
+    note:
+      "ctaVariant は週単位で分離されており比較的クリーン（主指標）。" +
+      "timing は曜日テーマや ctaVariant と交絡するため参考値。" +
+      "withMetrics が totalSuccess より大幅に少ない場合は回収待ち（集計の信頼度が低い）。",
+  };
+}
+
 // 毎日 3:00 JST に前日までの投稿のメトリクスを回収する。
 // 投稿（朝昼夜）から十分時間が経った頃に拾うことで、ある程度伸びた数値を取る。
 export const collectXMetricsScheduled = onSchedule(
