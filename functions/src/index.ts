@@ -17,6 +17,7 @@ import { authenticateRequest } from "./auth/verifyLiffToken";
 import { sendWeeklyReports } from "./reports/weeklyReport";
 import { sendScheduledNotifications } from "./notifications/scheduledNotifications";
 import { autoPostMorning, autoPostNoon, autoPostEvening } from "./x/autoPost";
+import { collectXMetrics, collectXMetricsScheduled } from "./x/metrics";
 import { createAndSetDefaultRichMenu } from "./line/richMenu";
 import { checkAndPushMilestone } from "./line/recordingFlow";
 import { buildAnalysisHighlights } from "./ai/analysis";
@@ -30,6 +31,7 @@ export { stripeWebhook };
 export { sendWeeklyReports };
 export { sendScheduledNotifications };
 export { autoPostMorning, autoPostNoon, autoPostEvening };
+export { collectXMetricsScheduled };
 
 // CORS設定: LIFFアプリのオリジンのみ許可
 const ALLOWED_ORIGINS = [
@@ -494,6 +496,20 @@ export const api = onRequest(
         }
         const richMenuId = await createAndSetDefaultRichMenu();
         res.json({ success: true, richMenuId });
+        return;
+      }
+
+      // X メトリクス回収の手動トリガ（疎通確認・即時回収用、ADMIN_API_KEY 必須）。
+      // 読み取りAPIが叩けるか（403でないか）と、xPostLogs への書き戻しをまとめて確認できる。
+      if (req.method === "POST" && path === "/api/admin/collect-x-metrics") {
+        const adminKey = process.env.ADMIN_API_KEY;
+        const provided = req.headers["x-admin-key"] || (req.headers.authorization || "").replace(/^Bearer\s+/i, "");
+        if (!adminKey || provided !== adminKey) {
+          res.status(401).json({ error: "Unauthorized" });
+          return;
+        }
+        const summary = await collectXMetrics();
+        res.json({ success: !summary.error, ...summary });
         return;
       }
 

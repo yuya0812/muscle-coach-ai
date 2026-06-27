@@ -21,6 +21,7 @@ import {
   startClarification,
   MAX_CLARIFY_QUESTIONS,
 } from "./recordingFlow";
+import { bumpAndMaybePrompt, handleFeedbackIfAwaiting } from "./reviewFlow";
 
 // LINE メッセージの送信者表示名（旧トレーナーキャラ名の代わりに固定のサービス名を使う）
 const APP_SENDER_NAME = "マッスルコーチ";
@@ -123,9 +124,20 @@ async function handleEvent(event: line.WebhookEvent): Promise<void> {
     return;
   }
 
+  // レビュー誘導の返信待ち: 受付中ならこの送信を感想として保存して終了する。
+  // 記録パースより前に判定し、感想の文章が記録として保存されるのを防ぐ。
+  const feedbackHandled = await handleFeedbackIfAwaiting(userId, replyToken, text);
+  if (feedbackHandled) return;
+
   // 記録フロー進行中
   const handled = await handleRecordingStep(userId, replyToken, text);
   if (handled) return;
+
+  // レビュー誘導: ここまで来た送信は「ユーザーが能動的に送った1通」とみなしてカウントする
+  // （フォロー/記録フロー継続中/フィードバック返信は上で return 済みなので含まれない）。
+  // 3通目に達したら、この送信への通常応答とは別に誘導メッセージを追いプッシュする。
+  // 通常処理（記録・分析・案内）は止めないので、ここでは return せず続行する。
+  await bumpAndMaybePrompt(userId);
 
   if (command === "記録" || command.startsWith("記録 ") || command.startsWith("記録　")) {
     await startRecordingFlow(userId, replyToken);
