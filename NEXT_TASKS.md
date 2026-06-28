@@ -1,6 +1,6 @@
 # 次回再開時のタスク
 
-最終更新: 2026-06-11
+最終更新: 2026-06-28
 
 セッション再開時はまずこのファイルを読む。完了したタスクは `[x]` でチェック、新しく見つけたら追加。
 
@@ -120,6 +120,29 @@
 
 ---
 
+## 🟡 インフラ技術負債（必要時に改修・運用は止まらない）
+
+2026-06-28 の functions デプロイ時に出た警告。いずれも今すぐ壊れるものではなく、
+動作には影響しない。期限・課金が絡むので必要時に着手するためメモしておく。
+
+### 1. Artifact Registry のクリーンアップポリシー未設定（少額課金リスク）
+デプロイのたびに古いコンテナイメージが asia-northeast1 に溜まり、放置すると
+ストレージ課金が少額ずつ増える。緊急度は低い。
+- [ ] `firebase functions:artifacts:setpolicy` でクリーンアップポリシーを設定
+      （または次回 deploy 時に `--force` を付けると自動設定される）
+- 着手トリガー: Artifact Registry のストレージ課金が目に見えて増えてきたら
+
+### 2. Node.js 20 ランタイム廃止 + firebase-functions が古い（期限あり）
+- Node.js 20 (2nd Gen) は **2026-04-30 に deprecated、2026-10-30 に decommission**。
+  それ以降は Node 20 のままだとデプロイ不可になる。
+- 併せて `firebase-functions` も outdated 警告（`npm install --save firebase-functions@latest`）。
+  メジャー更新で **breaking changes あり**と警告が出ているため、上げる際は要確認・要動作確認。
+- [ ] `functions/package.json` の engines を Node 22 等に上げてデプロイ確認
+- [ ] firebase-functions を latest に更新（breaking change の影響範囲を確認してから）
+- 着手トリガー: **2026-10-30 の decommission 前に必ず**（遅くとも 2026-09 中には着手したい）
+
+---
+
 ## UIリデザイン（完了）
 
 [design_handoff_ui_redesign/](design_handoff_ui_redesign/) の12ファイル差し替え指示は
@@ -138,7 +161,10 @@
 ## 🟡 X集客フォロー（運用フェーズ）
 
 ### 2週間後（2026-06-04頃）
-- [ ] `xPostLogs` を `ctaVariant` で集計し、エンゲージメント率を比較
+- [x] `xPostLogs` を集計し勝ちパターンを判定（2026-06-28）。勝ちパターン＝
+      「具体的な重量のビフォーアフター」＋「記録してなかったら気づかなかった後悔」。
+      これを `x/autoPost.ts` の `buildSystemPrompt` に最優先構成として反映済み（commit 94f63be）。
+  - [ ] 反映後の投稿でエンゲージメントが実際に上がったか、1〜2週後に再集計して効果検証する
 - [ ] LINE友達追加数の推移と突き合わせ、効くCTAバリアントを判定
 - [ ] フォロワー1,000人超えアカウントの手動フォロー返し
 - [ ] Xコメントが増えたら、まとめてエージェントに貼って分析依頼
