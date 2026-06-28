@@ -62,7 +62,7 @@ export function createMenuFlexMessage(): line.messagingApi.FlexMessage {
           type: "button",
           action: {
             type: "uri",
-            label: "📱 アプリで記録・管理する",
+            label: "アプリで記録・管理する",
             uri: liffUrl,
           },
           style: "secondary",
@@ -152,10 +152,9 @@ export function createWelcomeMessages(liffId: string | undefined): line.messagin
       margin: "md",
       spacing: "sm",
       contents: [
-        createFeatureRow("🤖", "AIトレーナーとの会話", "フォーム指導・栄養相談など"),
-        createFeatureRow("🏋️", "今日のメニュー提案", "あなたに合ったメニューを提案"),
-        createFeatureRow("📊", "トレーニング分析", "記録に基づいたフィードバック"),
-        createFeatureRow("📋", "週間メニュー作成", "目標に合ったプログラム"),
+        createFeatureRow("記録", "雑に送るだけで記録", "「ベンチ60kg 10回 3セット」のように送るだけ"),
+        createFeatureRow("補完", "足りない情報は聞き返し", "回数やセット数が抜けてもその場で確認"),
+        createFeatureRow("分析", "AIが伸び・継続を言語化", "たまった記録を集計して言葉でまとめる"),
       ],
     },
     {
@@ -184,7 +183,7 @@ export function createWelcomeMessages(liffId: string | undefined): line.messagin
       type: "button",
       action: {
         type: "uri",
-        label: "📱 アプリを開く",
+        label: "アプリを開く",
         uri: liffUrl,
       },
       style: "secondary",
@@ -195,7 +194,7 @@ export function createWelcomeMessages(liffId: string | undefined): line.messagin
 
   const flexMessage: line.messagingApi.FlexMessage = {
     type: "flex",
-    altText: "マッスルコーチAIへようこそ！",
+    altText: "マッスルコーチへようこそ",
     contents: {
       type: "bubble",
       header: {
@@ -205,7 +204,7 @@ export function createWelcomeMessages(liffId: string | undefined): line.messagin
         contents: [
           {
             type: "text",
-            text: "💪 マッスルコーチAIへようこそ！",
+            text: "マッスルコーチへようこそ",
             weight: "bold",
             size: "md",
             color: "#ffffff",
@@ -224,14 +223,14 @@ export function createWelcomeMessages(liffId: string | undefined): line.messagin
   return [
     {
       type: "text",
-      text: "こんにちは！AIパーソナルトレーナーのマッスルコーチAIです💪\n\nトレーニングのことなら何でも気軽に話しかけてください！\n「今日のメニュー」「メニュー作成」「分析」などのキーワードも使えます。",
+      text: "はじめまして、マッスルコーチです。\n\nトレーニングはこのLINEに雑に送るだけで記録できます。「ベンチプレス 60kg 10回 3セット」のように送ってみてください。\n\n記録がたまったら「分析」と送ると、伸びている種目や続けられている種目をまとめます。",
     },
     flexMessage,
   ];
 }
 
 function createFeatureRow(
-  emoji: string,
+  tag: string,
   title: string,
   desc: string
 ): line.messagingApi.FlexBox {
@@ -242,8 +241,10 @@ function createFeatureRow(
     contents: [
       {
         type: "text",
-        text: emoji,
-        size: "sm",
+        text: tag,
+        size: "xxs",
+        weight: "bold",
+        color: "#1DB446",
         flex: 0,
       },
       {
@@ -284,7 +285,7 @@ export function createWorkoutConfirmFlexMessage(
         contents: [
           {
             type: "text",
-            text: "✅ 記録完了！",
+            text: "記録完了",
             weight: "bold",
             size: "lg",
             color: "#1DB446",
