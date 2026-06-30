@@ -2,9 +2,26 @@ import * as admin from "firebase-admin";
 
 const db = admin.firestore;
 
-const FREE_DAILY_LIMIT = 3;
-const PREMIUM_DAILY_LIMIT = 100;
+// 課金軸（2026-07 再設計）。フリーは記録1日3回・分析週1回。プレミアムは無制限。
+// 詳細は CLAUDE.md「プレミアムプラン仕様」を参照。
+const FREE_RECORD_DAILY_LIMIT = 3; // フリー: 記録（自然文パース）1日3回
+const FREE_ANALYZE_WEEKLY_LIMIT = 1; // フリー: 分析 週1回
 const COOLDOWN_MS = 3000;
+
+// 🔴 ベータフラグ: true の間はフリーユーザーも全員プレミアム扱い（記録・分析無制限、特典あり）。
+// まずユーザーを集めることを優先する。集客が乗ったら false にして課金導線を有効化する。
+// 詳細は CLAUDE.md「ロールアウト戦略: ベータ期間は全員プレミアム扱い」を参照。
+const BETA_ALL_PREMIUM = true;
+
+// 課金済み（または解約予約中で期間内）かどうか。ベータ中は全員 true。
+// プレミアム判定はこの関数に一元化する（散在させると BETA フラグの切り替え漏れが起きる）。
+export function isPremiumUser(data: UserData): boolean {
+  if (BETA_ALL_PREMIUM) return true;
+  const status = data.subscription?.status;
+  return status === "active" || status === "canceling";
+}
+
+export type UsageKind = "record" | "analyze";
 
 // 利用規約・プライバシーポリシーの現行バージョン。
 // 規約を改訂するたびに日付を更新すると、全ユーザーが起動時に再同意モーダルを見ることになる。
@@ -52,9 +69,17 @@ export interface UserData {
     cancelAt: FirebaseFirestore.Timestamp | null;
   };
   usage: {
+    // 旧: 分析の日次カウンタ。2026-07 課金軸再設計で記録=日次/分析=週次に分離したため、
+    // 新ロジックでは未使用。既存 doc 互換のため型は残す。
     dailyCount: number;
     lastResetDate: string;
     lastCallAt?: FirebaseFirestore.Timestamp;
+    // 記録（自然文パース）の日次カウンタ。recordResetDate が当日でなければリセット。
+    recordDailyCount?: number;
+    recordResetDate?: string; // JST の YYYY-MM-DD
+    // 分析の週次カウンタ。analyzeWeekStart がその週の月曜（JST）でなければリセット。
+    analyzeWeekCount?: number;
+    analyzeWeekStart?: string; // その週の月曜 JST の YYYY-MM-DD
   };
   settings: {
     notificationEnabled: boolean;
@@ -78,8 +103,9 @@ export async function getOrCreateUser(lineUserId: string, displayName?: string):
   const doc = await userRef.get();
 
   if (doc.exists) {
-    const data = doc.data() as UserData;
-    return resetDailyUsageIfNeeded(lineUserId, data);
+    // 利用カウンタのリセットは incrementUsage / getRemainingUsage 内で
+    // 日付・週起点を見て都度判定するため、ここでの事前リセットは不要。
+    return doc.data() as UserData;
   }
 
   const newUser: UserData = {
@@ -139,18 +165,24 @@ export async function updateUserSettings(
   await db().collection("users").doc(lineUserId).update(updates);
 }
 
+/**
+ * 利用回数を消費する（記録 or 分析）。フリーユーザーのみ上限がある。
+ * - record: 日次3回（recordResetDate が当日でなければリセット）
+ * - analyze: 週次1回（analyzeWeekStart がその週の月曜でなければリセット）
+ * プレミアム（ベータ中は全員）は上限なし。連投クールダウンは両方に効かせる。
+ */
 export async function incrementUsage(
-  lineUserId: string
+  lineUserId: string,
+  kind: UsageKind
 ): Promise<{ allowed: boolean; reason?: UsageDeniedReason }> {
   const userRef = db().collection("users").doc(lineUserId);
   const doc = await userRef.get();
   if (!doc.exists) return { allowed: false, reason: "limit" };
 
   const data = doc.data() as UserData;
-  const userData = await resetDailyUsageIfNeeded(lineUserId, data);
 
-  // クールダウン: 連投でClaude APIコストが膨らむのを防ぐ
-  const lastCallAt = userData.usage.lastCallAt;
+  // クールダウン: 連投でClaude APIコストが膨らむのを防ぐ（記録・分析共通）
+  const lastCallAt = data.usage.lastCallAt;
   if (lastCallAt) {
     const elapsed = Date.now() - lastCallAt.toMillis();
     if (elapsed < COOLDOWN_MS) {
@@ -158,50 +190,73 @@ export async function incrementUsage(
     }
   }
 
-  const isPremium =
-    userData.subscription.status === "active" || userData.subscription.status === "canceling";
-  const dailyLimit = isPremium ? PREMIUM_DAILY_LIMIT : FREE_DAILY_LIMIT;
+  const updates: Record<string, unknown> = {
+    "usage.lastCallAt": admin.firestore.Timestamp.now(),
+  };
 
-  if (userData.usage.dailyCount >= dailyLimit) {
-    return { allowed: false, reason: "limit" };
+  // プレミアム（ベータ中は全員）は上限チェックをスキップし、カウントだけ進める
+  const premium = isPremiumUser(data);
+
+  if (kind === "record") {
+    const today = getTodayString();
+    const count = data.usage.recordResetDate === today ? data.usage.recordDailyCount ?? 0 : 0;
+    if (!premium && count >= FREE_RECORD_DAILY_LIMIT) {
+      return { allowed: false, reason: "limit" };
+    }
+    updates["usage.recordDailyCount"] = count + 1;
+    updates["usage.recordResetDate"] = today;
+  } else {
+    const weekStart = getWeekStartString();
+    const count = data.usage.analyzeWeekStart === weekStart ? data.usage.analyzeWeekCount ?? 0 : 0;
+    if (!premium && count >= FREE_ANALYZE_WEEKLY_LIMIT) {
+      return { allowed: false, reason: "limit" };
+    }
+    updates["usage.analyzeWeekCount"] = count + 1;
+    updates["usage.analyzeWeekStart"] = weekStart;
   }
 
-  await userRef.update({
-    "usage.dailyCount": admin.firestore.FieldValue.increment(1),
-    "usage.lastCallAt": admin.firestore.Timestamp.now(),
-  });
+  await userRef.update(updates);
   return { allowed: true };
 }
 
-export async function getRemainingUsage(lineUserId: string): Promise<number | null> {
+/**
+ * フリーユーザーの残り利用可能回数を返す（LIFF 表示用）。プレミアムは null（無制限）。
+ * record=その日の残り、analyze=その週の残り。
+ */
+export async function getRemainingUsage(
+  lineUserId: string,
+  kind: UsageKind
+): Promise<number | null> {
   const userRef = db().collection("users").doc(lineUserId);
   const doc = await userRef.get();
   if (!doc.exists) return 0;
 
   const data = doc.data() as UserData;
-  if (data.subscription.status === "active" || data.subscription.status === "canceling") return null; // unlimited
+  if (isPremiumUser(data)) return null; // unlimited
 
-  return Math.max(0, FREE_DAILY_LIMIT - data.usage.dailyCount);
-}
-
-async function resetDailyUsageIfNeeded(
-  lineUserId: string,
-  data: UserData
-): Promise<UserData> {
-  const today = getTodayString();
-  if (data.usage.lastResetDate !== today) {
-    data.usage.dailyCount = 0;
-    data.usage.lastResetDate = today;
-    await db().collection("users").doc(lineUserId).update({
-      "usage.dailyCount": 0,
-      "usage.lastResetDate": today,
-    });
+  if (kind === "record") {
+    const today = getTodayString();
+    const count = data.usage.recordResetDate === today ? data.usage.recordDailyCount ?? 0 : 0;
+    return Math.max(0, FREE_RECORD_DAILY_LIMIT - count);
   }
-  return data;
+  const weekStart = getWeekStartString();
+  const count = data.usage.analyzeWeekStart === weekStart ? data.usage.analyzeWeekCount ?? 0 : 0;
+  return Math.max(0, FREE_ANALYZE_WEEKLY_LIMIT - count);
 }
 
 function getTodayString(): string {
   const now = new Date();
   const jst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  return jst.toISOString().split("T")[0];
+}
+
+// その週の月曜（JST）の YYYY-MM-DD を返す。分析の週次カウンタの起点に使う。
+// 分析は「週区切り（直近7日が軸）」だが、カウンタは暦週（月曜起点）で揃える。
+function getWeekStartString(): string {
+  const now = new Date();
+  const jst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  const day = jst.getUTCDay(); // 0=日,1=月,... (jst は +9h した値を UTC として読む)
+  const diffToMonday = (day + 6) % 7; // 月曜からの経過日数
+  jst.setUTCDate(jst.getUTCDate() - diffToMonday);
   return jst.toISOString().split("T")[0];
 }

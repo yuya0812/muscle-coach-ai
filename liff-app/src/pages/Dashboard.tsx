@@ -672,7 +672,7 @@ export default function Dashboard({ userId }: { userId: string }) {
         </SummaryLeft>
         {remaining !== undefined && (
           <GoldBox>
-            <GoldLabel>今月の残り</GoldLabel>
+            <GoldLabel>今週の分析残り</GoldLabel>
             <GoldNumberRow>
               <GoldNumber>{remaining === null ? '∞' : remaining}</GoldNumber>
               {remaining !== null && <GoldUnit>回</GoldUnit>}
@@ -826,7 +826,7 @@ export default function Dashboard({ userId }: { userId: string }) {
 
       {typeof remaining === 'number' && remaining <= 2 && remaining > 0 && (
         <UpgradeNudge>
-          <NudgeText>残り{remaining}回です。プレミアムで無制限に！</NudgeText>
+          <NudgeText>今週の分析が残り{remaining}回です。プレミアムなら回数無制限。</NudgeText>
           <NudgeButton onClick={() => navigate('/subscribe')}>
             アップグレード
           </NudgeButton>

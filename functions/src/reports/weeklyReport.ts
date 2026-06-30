@@ -3,6 +3,7 @@ import * as admin from "firebase-admin";
 import { pushText } from "../line/messages";
 import { buildAnalysis } from "../ai/analysis";
 import { countWorkoutsSince } from "../workout/recorder";
+import { isPremiumUser, type UserData } from "../user/manager";
 
 /**
  * 毎週月曜日 8:00 JSTにプレミアムユーザーへ週次レポートを送信。
@@ -21,13 +22,13 @@ export const sendWeeklyReports = onSchedule(
   async () => {
     const db = admin.firestore();
 
-    // プレミアムかつ通知設定OFFのユーザーのみ（通知設定ONは sendScheduledNotifications 側で対応）
+    // プレミアムかつ通知設定OFFのユーザーのみ（通知設定ONは sendScheduledNotifications 側で対応）。
+    // プレミアム判定は isPremiumUser に一元化（ベータ中は全員プレミアム扱い）。
     const usersSnapshot = await db.collection("users").get();
     const targets = usersSnapshot.docs.filter((doc) => {
-      const data = doc.data();
-      const isPremium = data.subscription?.status === "active";
+      const data = doc.data() as UserData;
       const notifEnabled = data.settings?.notificationEnabled === true;
-      return isPremium && !notifEnabled;
+      return isPremiumUser(data) && !notifEnabled;
     });
 
     console.log(`Sending weekly reports to ${targets.length} users`);

@@ -2,7 +2,7 @@ import * as admin from "firebase-admin";
 import { onRequest } from "firebase-functions/v2/https";
 import { lineWebhook } from "./line/webhook";
 import { stripeWebhook, createCheckoutSession, createCustomerPortalSession } from "./subscription/stripe";
-import { getOrCreateUser, updateUserProfile, getRemainingUsage, updateUserSettings, TERMS_CURRENT_VERSION } from "./user/manager";
+import { getOrCreateUser, updateUserProfile, getRemainingUsage, incrementUsage, updateUserSettings, TERMS_CURRENT_VERSION } from "./user/manager";
 import {
   getRecentWorkouts,
   getWorkoutsByMonth,
@@ -407,6 +407,19 @@ export const api = onRequest(
           res.status(400).json({ error: "Missing required fields" });
           return;
         }
+        // 記録はフリーで1日3回まで（ベータ中は全員無制限）。LINE 自然文記録と合算で日次判定。
+        const usage = await incrementUsage(userId, "record");
+        if (!usage.allowed) {
+          res.status(429).json({
+            error: "record_limit",
+            reason: usage.reason,
+            message:
+              usage.reason === "cooldown"
+                ? "続けて記録すると追いつかないので、数秒後にもう一度お願いします。"
+                : "今日の記録回数の上限に達しました。プレミアムなら無制限で記録できます。",
+          });
+          return;
+        }
         await saveWorkoutDirectly(userId, exercises, date);
         res.json({ success: true });
         checkAndPushMilestone(userId).catch((err) =>
@@ -466,11 +479,11 @@ export const api = onRequest(
         return;
       }
 
-      // Usage status
+      // Usage status（分析の残り回数。フリーは週1回、プレミアムは null=無制限）
       if (req.method === "GET" && (path === "/api/usage" || path === "/usage")) {
         const userId = req.query.userId as string;
         if (!userId) { res.status(400).json({ error: "Missing userId" }); return; }
-        const remaining = await getRemainingUsage(userId);
+        const remaining = await getRemainingUsage(userId, "analyze");
         res.json({ remaining }); // null = unlimited (premium)
         return;
       }

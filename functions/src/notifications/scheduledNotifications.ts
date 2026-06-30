@@ -3,6 +3,7 @@ import * as admin from "firebase-admin";
 import * as line from "@line/bot-sdk";
 import { pushMessages } from "../line/messages";
 import { sendWeeklyReportToUser } from "../reports/weeklyReport";
+import { isPremiumUser, type UserData } from "../user/manager";
 
 // LINE メッセージの送信者表示名（旧トレーナーキャラ名の代わりに固定のサービス名）
 const APP_SENDER_NAME = "マッスルコーチ";
@@ -48,14 +49,19 @@ export const sendScheduledNotifications = onSchedule(
     const currentDay = now.getDay(); // 0=日, 1=月, ...
 
     for (const userDoc of usersSnapshot.docs) {
-      const data = userDoc.data();
+      const data = userDoc.data() as UserData;
+
+      // プッシュ通知はプレミアム特典（ベータ中は全員プレミアム扱い＝全員に届く）。
+      // フラグを false にするとフリーユーザーは通知対象から外れる。
+      if (!isPremiumUser(data)) continue;
+
       const notifTime: string = data.settings?.notificationTime || "09:00";
       const notifHour = parseInt(notifTime.split(":")[0], 10);
 
       if (notifHour !== currentHour) continue;
 
       const userId = userDoc.id;
-      const nickname: string = data.profile?.nickname || data.profile?.name || "ゲスト";
+      const nickname: string = data.profile?.name || "ゲスト";
       const sender = { name: APP_SENDER_NAME };
 
       // 月曜は週次レポートを必ず送る（プレミアム会員のみ）。曜日設定の影響を受けない固定通知。

@@ -173,6 +173,16 @@ async function handleEvent(event: line.WebhookEvent): Promise<void> {
   // - 欠損が聞き返し上限（2問）以内 → 保留して聞き返し開始（保存はまだしない）
   // - 欠損が上限超 → 保存せず入力例を案内（中途半端な記録は残さない）
   if (intent === "record") {
+    // 記録はフリーで1日3回まで（ベータ中は全員無制限）。パース（Claude API）を呼ぶ前に判定する。
+    const recordUsage = await incrementUsage(userId, "record");
+    if (!recordUsage.allowed) {
+      const msg =
+        recordUsage.reason === "cooldown"
+          ? "続けて送られると追いつかないので、数秒後にもう一度お願いします。"
+          : "今日の記録回数の上限に達しました。\nプレミアムなら回数無制限で記録できます。";
+      await replyMessages(replyToken, [buildMsg(msg, sender)]);
+      return;
+    }
     await replyMessages(replyToken, [buildMsg("記録を読み取っています。", sender)]);
     try {
       const exercises = await parseWorkoutText(text);
@@ -266,12 +276,13 @@ async function runAnalysis(
   }
 
   // 利用回数チェック + 連投クールダウン（記録があるユーザーにのみ課金判定する）
-  const usage = await incrementUsage(userId);
+  // 分析はフリーで週1回まで（ベータ中は全員無制限）。
+  const usage = await incrementUsage(userId, "analyze");
   if (!usage.allowed) {
     const msg =
       usage.reason === "cooldown"
         ? "続けて送られると追いつかないので、数秒後にもう一度お願いします。"
-        : "本日の利用回数の上限に達しました。\n時間をおいてもう一度お試しください。";
+        : "今週の分析回数の上限に達しました。\nプレミアムなら回数無制限で分析できます。";
     await replyMessages(replyToken, [buildMsg(msg, sender)]);
     return;
   }
