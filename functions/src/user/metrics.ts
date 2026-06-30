@@ -80,7 +80,6 @@ export function deriveMetrics(profile: UserProfile): DerivedMetrics {
 // AIシステムプロンプトに差し込むユーザー情報セクションを文字列化する
 export function buildUserContextBlock(profile: UserProfile): string {
   const lines: string[] = [];
-  if (profile.trainerName) lines.push(`呼び方: ${profile.trainerName}`);
   if (profile.birthYearRange) lines.push(`年代: ${jpYearRange(profile.birthYearRange)}`);
   if (profile.sex) lines.push(`性別: ${jpSex(profile.sex)}`);
   if (profile.heightCm) lines.push(`身長: ${profile.heightCm}cm`);

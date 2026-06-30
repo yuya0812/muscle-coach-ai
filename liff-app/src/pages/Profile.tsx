@@ -454,7 +454,7 @@ export default function Profile({ userId }: { userId: string }) {
   // 編集モード（profile / notification をそれぞれ独立に切替可能）
   const [profileMode, setProfileMode] = useState<'view' | 'edit'>('view')
   const [notifMode, setNotifMode] = useState<'view' | 'edit'>('view')
-  // 設定済みかどうか（trainerName か goal が入っていれば設定済み）
+  // 設定済みかどうか（goal が入っていれば設定済み）
   const [hasInitialData, setHasInitialData] = useState(false)
 
   useEffect(() => {

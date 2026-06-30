@@ -45,8 +45,6 @@ export interface ProfileData {
     level: string
     equipment: string | string[]
     frequency: number
-    trainerName?: string
-    trainerType?: string
     // セットアップヒアリング項目
     birthYearRange?: string
     sex?: string
@@ -77,8 +75,8 @@ export async function getProfile(userId: string): Promise<ProfileData> {
 }
 
 // プロフィール更新（セットアップ追加項目もこのエンドポイントで送れる）
-// trainerName/trainerType は方針転換でトレーナーキャラを廃止したため送らない
-// （Firestore のフィールド自体は既存ユーザー保護のため残置）。
+// trainerName/trainerType は方針転換（2026-06）でトレーナーキャラを廃止したため
+// 送受信しない。Firestore のフィールド自体は既存ユーザーの doc 保護のため残置。
 export interface ProfileUpdateInput {
   goal?: string
   level?: string

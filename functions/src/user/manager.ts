@@ -19,6 +19,8 @@ export interface UserProfile {
   equipment: string;
   frequency: number;
   createdAt: FirebaseFirestore.Timestamp;
+  // 廃止: トレーナーキャラ（2026-06 方針転換）。既存ユーザーの doc 保護のため型は残すが、
+  // 新規の読み書き・AIプロンプトへの注入はしない。完全削除は将来マイグレーションで。
   trainerType?: string;
   trainerName?: string;
   // 旧オンボーディングの遺物（読み込み互換のため残す。新ヒアリングでは使わない）
@@ -88,8 +90,6 @@ export async function getOrCreateUser(lineUserId: string, displayName?: string):
       equipment: "",
       frequency: 3,
       createdAt: admin.firestore.Timestamp.now(),
-      // LIFF Profile画面で変更可能。LINE側オンボーディングを廃止したのでデフォルト trainerType を設定
-      trainerType: "hot",
     },
     subscription: {
       status: "free",

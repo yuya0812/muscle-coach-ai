@@ -169,8 +169,6 @@ export const api = onRequest(
             level: user.profile.level || "beginner",
             equipment: user.profile.equipment || "",
             frequency: user.profile.frequency || 3,
-            trainerName: user.profile.trainerName,
-            trainerType: user.profile.trainerType || "hot",
             // セットアップヒアリング項目
             birthYearRange: user.profile.birthYearRange,
             sex: user.profile.sex,
@@ -205,10 +203,9 @@ export const api = onRequest(
         if (!userId) { res.status(400).json({ error: "Missing userId" }); return; }
         const updates: Record<string, unknown> = {};
 
-        // 既存フィールド
+        // 既存フィールド（trainerName/trainerType は廃止。受け付けない）
         const passthrough = [
           "goal", "level", "equipment", "frequency",
-          "trainerName", "trainerType",
         ];
         for (const k of passthrough) {
           if (body[k] !== undefined) updates[k] = body[k];
