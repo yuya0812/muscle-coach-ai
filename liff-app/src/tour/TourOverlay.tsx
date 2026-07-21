@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import styled from 'styled-components'
 import { useTour } from './TourContext'
 import { theme } from '../theme'
@@ -96,17 +97,29 @@ interface Rect {
 }
 
 const POLL_INTERVAL = 100
-const POLL_LIMIT = 25 // 約2.5秒
+const POLL_LIMIT = 50 // 約5秒。画面をまたぐステップは遷移＋データ取得を待つため長めに取る
 
 export default function TourOverlay() {
   const { active, currentStep, stepIndex, totalSteps, next, skipScreen } = useTour()
+  const location = useLocation()
   const [rect, setRect] = useState<Rect | null>(null)
   const tooltipRef = useRef<HTMLDivElement>(null)
   const [tooltipPos, setTooltipPos] = useState<{ top: number; left: number; width: number } | null>(null)
 
-  // 対象要素を polling で待ち、見つかったら矩形を取得
+  // 対象要素を polling で待ち、見つかったら矩形を取得。
+  // 画面をまたぐステップ（例: /workout-log → /profile）では、ステップが変わった直後は
+  // まだ旧画面なのでターゲットが見つからない。TourContext が navigate した後、
+  // location.pathname が変わったタイミングでこの effect が張り直され、新しい画面の
+  // DOM から探し直す（依存に location.pathname を含めているのがその狙い）。
   useEffect(() => {
     if (!active || !currentStep) {
+      setRect(null)
+      setTooltipPos(null)
+      return
+    }
+    // 目的の画面にまだ遷移していない間は探しに行かない（無駄な polling を避ける）。
+    // location.pathname が currentStep.path に一致してからターゲットを待つ。
+    if (location.pathname !== currentStep.path) {
       setRect(null)
       setTooltipPos(null)
       return
@@ -138,7 +151,7 @@ export default function TourOverlay() {
     tick()
 
     return () => { cancelled = true }
-  }, [active, currentStep, stepIndex])
+  }, [active, currentStep, stepIndex, location.pathname])
 
   // ウィンドウリサイズ・スクロールで再計測
   useEffect(() => {
