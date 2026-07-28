@@ -12,6 +12,7 @@ import WorkoutLog from './pages/WorkoutLog'
 import WorkoutInput from './pages/WorkoutInput'
 import Onboarding from './pages/Onboarding'
 import Setup from './pages/Setup'
+import Timer from './pages/Timer'
 import { TourProvider, useTour, hasSeenTour } from './tour/TourContext'
 import TourOverlay from './tour/TourOverlay'
 
@@ -81,6 +82,7 @@ export default function App() {
             <Route path="/profile" element={<Profile userId={user.userId} />} />
             <Route path="/workout-input" element={<WorkoutInput userId={user.userId} />} />
             <Route path="/workout-log" element={<WorkoutLog userId={user.userId} />} />
+            <Route path="/timer" element={<Timer />} />
             <Route path="*" element={<Navigate to={isOnboarded ? '/dashboard' : '/onboarding'} replace />} />
           </Routes>
           <BottomNav />

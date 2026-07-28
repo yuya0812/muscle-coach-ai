@@ -67,6 +67,12 @@ const IconCalendar = (
     <line x1="3" y1="10" x2="21" y2="10"/>
   </svg>
 )
+const IconClock = (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="9"/>
+    <polyline points="12 7 12 12 15.5 14"/>
+  </svg>
+)
 const IconSettings = (
   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="3"/>
@@ -83,6 +89,7 @@ const tabs = [
   { path: '/dashboard', icon: IconHome, label: 'ホーム' },
   { path: '/workout-input', icon: IconPlus, label: '記録' },
   { path: '/workout-log', icon: IconCalendar, label: '履歴' },
+  { path: '/timer', icon: IconClock, label: 'タイマー' },
   { path: '/profile', icon: IconSettings, label: '設定' },
   { path: '/subscribe', icon: IconCrown, label: 'プラン' },
 ]

@@ -33,5 +33,5 @@ export const TOUR_STEPS: TourStep[] = [
   { path: '/subscribe', target: 'subscribe-cta', title: 'プレミアムを試す', body: '最初の1週間は無料でお試し可能。AI分析無制限・週次レポートなどが解放されます。' },
 
   // BottomNav (last)
-  { path: '/dashboard', target: 'nav-bar', title: '画面切替はここから', body: '5つのタブで画面を切り替えられます。次回からあなた専用のホーム画面として使ってください。' },
+  { path: '/dashboard', target: 'nav-bar', title: '画面切替はここから', body: '下のタブで画面を切り替えられます。セット間の休憩はタイマーが便利です。次回からあなた専用のホーム画面として使ってください。' },
 ]
