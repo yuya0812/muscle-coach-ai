@@ -40,31 +40,31 @@
 ## タスク分解
 
 ### Phase 1: バックエンド軽量サマリーAPI（1.5h）
-- [ ] analysis.ts: 集計部分を切り出し `buildAnalysisHighlights(userId): Promise<AnalysisHighlights | null>`
+- [x] analysis.ts: 集計部分を切り出し `buildAnalysisHighlights(userId): Promise<AnalysisHighlights | null>`
       を追加。buildAnalysis もこれを使うようリファクタ（重複集計を避ける）
-- [ ] index.ts: `GET /api/analysis-summary` を追加（認証は既存 verifyLiffToken パターンに合わせる）
-- [ ] functions ビルド通過確認
+- [x] index.ts: `GET /api/analysis-summary` を追加（認証は既存 verifyLiffToken パターンに合わせる）
+- [x] functions ビルド通過確認
 
 ### Phase 2: 不要UI除去（1.5h）
-- [ ] Profile.tsx: trainerName/trainerType の state・読み込み・保存・view/edit UI を削除。
+- [x] Profile.tsx: trainerName/trainerType の state・読み込み・保存・view/edit UI を削除。
       「トレーナー / 目標」セクションを「目標」セクションにリネーム
-- [ ] api.ts: updateProfile の引数から trainer 系を外す（ProfileUpdateInput 調整）
-- [ ] Subscribe.tsx: PREMIUM_FEATURES 差し替え
-- [ ] Setup.tsx / Onboarding.tsx / tour/steps.ts: 旧文言の差し替え
-- [ ] 絵文字混入チェック（触ったファイル）
+- [x] api.ts: updateProfile の引数から trainer 系を外す（ProfileUpdateInput 調整）
+- [x] Subscribe.tsx: PREMIUM_FEATURES 差し替え
+- [x] Setup.tsx / Onboarding.tsx / tour/steps.ts: 旧文言の差し替え
+- [x] 絵文字混入チェック（触ったファイル）
 
 ### Phase 3: ダッシュボード新カード + 計器盤強化（3h）
-- [ ] theme.ts: 微光ハイライト等トークン追加
-- [ ] api.ts: getAnalysisSummary + AnalysisSummary 型追加
-- [ ] Dashboard.tsx: 旧AIコーチカード撤去 → 記録導線カード（チャットバブル風 + 2アクション）
-- [ ] Dashboard.tsx: 分析サマリーカード（4セクション・色分け・記録なし時の案内）
-- [ ] Dashboard.tsx: サマリー数値の計器盤対比を強化（トラッキング・単位縮小）
-- [ ] tour/steps.ts: 新カードにツアーターゲットを合わせる
+- [x] theme.ts: 微光ハイライト等トークン追加
+- [x] api.ts: getAnalysisSummary + AnalysisSummary 型追加
+- [x] Dashboard.tsx: 旧AIコーチカード撤去 → 記録導線カード（チャットバブル風 + 2アクション）
+- [x] Dashboard.tsx: 分析サマリーカード（4セクション・色分け・記録なし時の案内）
+- [x] Dashboard.tsx: サマリー数値の計器盤対比を強化（トラッキング・単位縮小）
+- [x] tour/steps.ts: 新カードにツアーターゲットを合わせる
 
 ### Phase 4: 確認（1h）
-- [ ] liff-app ビルド（npm run build）通過
-- [ ] Design DNA の Do/Don't 自己検証（green の意味限定 / gold 一点 / フォント不増 / 濃い影なし）
-- [ ] TESTING_CHECKLIST に UI 確認項目を追記
+- [x] liff-app ビルド（npm run build）通過
+- [x] Design DNA の Do/Don't 自己検証（green の意味限定 / gold 一点 / フォント不増 / 濃い影なし）
+- [x] TESTING_CHECKLIST に UI 確認項目を追記
 
 ## リスク・懸念点
 

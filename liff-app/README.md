@@ -1,73 +1,30 @@
-# React + TypeScript + Vite
+# liff-app
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+マッスルコーチAI の LIFF フロントエンド（React 19 + TypeScript + Vite + Styled Components）。
+プロジェクト全体の説明はルートの [README.md](../README.md) を参照。
 
-Currently, two official plugins are available:
+## 画面
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+| ページ | 内容 |
+|---|---|
+| Dashboard | 今週の回数・重量推移グラフ・マイルストーン・分析サマリー・LINE 記録導線 |
+| WorkoutInput | フォームでの記録（種目ごとに複数セット） |
+| WorkoutLog | 月カレンダーの記録履歴 |
+| Timer | インターバルタイマー / ストップウォッチ |
+| Profile / Setup | プロフィール・通知設定、初回ヒアリング |
+| Subscribe | プラン表示と Stripe Checkout / Customer Portal への遷移 |
 
-## React Compiler
+## 実装上のルール
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- Firestore には直接アクセスしない。データ操作はすべて [src/api.ts](src/api.ts) 経由で
+  Functions の REST API を呼び、各リクエストに LIFF Access Token を付与する。
+- デザイン上の制約は [DESIGN_CONSTRAINTS.md](DESIGN_CONSTRAINTS.md) を参照。
 
-## Expanding the ESLint configuration
+## コマンド
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
-
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev     # 開発サーバ（LIFF は HTTPS 必須のため LIFF Inspector 等を併用）
+npm run build   # ../public に出力（firebase.json の hosting public）
+npm run lint
 ```

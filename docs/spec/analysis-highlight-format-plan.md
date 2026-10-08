@@ -46,24 +46,24 @@
 ## タスク分解
 
 ### Phase 1: 週区切り集計とハイライト選定（2h）
-- [ ] `history.ts` に直近7日間の週次スナップショット集計を追加
+- [x] `history.ts` に直近7日間の週次スナップショット集計を追加
       （部位別刺激回数・セッション数。date 範囲クエリで取得）
-- [ ] ハイライト選定ロジックを実装（weakpoints/improved/stagnant 各最大2、nextStep 1点の
+- [x] ハイライト選定ロジックを実装（weakpoints/improved/stagnant 各最大2、nextStep 1点の
       優先順位ルール）。判定はすべて確定的（同じ記録なら同じ選定結果）
-- [ ] 週内記録0件を判定できるシグナルを戻り値に含める
+- [x] 週内記録0件を判定できるシグナルを戻り値に含める
 
 ### Phase 2: 言語化の組み替え（1.5h）
-- [ ] `ANALYSIS_VERBALIZE_PROMPT` を「弱点 / 伸びているところ / 伸び悩んでいるところ /
+- [x] `ANALYSIS_VERBALIZE_PROMPT` を「弱点 / 伸びているところ / 伸び悩んでいるところ /
       次のステップ」の固定4見出し出力に改訂
-- [ ] `buildAnalysisData` を AnalysisHighlights ベースに書き換え（選定済み項目のみ渡す。
+- [x] `buildAnalysisData` を AnalysisHighlights ベースに書き換え（選定済み項目のみ渡す。
       該当なしセクションは「該当なし」「まだ判定できない」を明示して渡す）
-- [ ] AnalysisKind の整理（廃止 or 縮小）と呼び出し元の追従
+- [x] AnalysisKind の整理（廃止 or 縮小）と呼び出し元の追従
 
 ### Phase 3: 経路接続・確認（1h）
-- [ ] `runAnalysis`（webhook）: 週内記録0件なら課金せず「今週はまだ記録がない」案内
-- [ ] マイルストーン経路（recordingFlow）と週次レポート（weeklyReport）の動作整合
-- [ ] `npm run build` 通過確認
-- [ ] CLAUDE.md の分析記述・TESTING_CHECKLIST の確認項目を更新
+- [x] `runAnalysis`（webhook）: 週内記録0件なら課金せず「今週はまだ記録がない」案内
+- [x] マイルストーン経路（recordingFlow）と週次レポート（weeklyReport）の動作整合
+- [x] `npm run build` 通過確認
+- [x] CLAUDE.md の分析記述・TESTING_CHECKLIST の確認項目を更新
 
 ## リスク・懸念点
 

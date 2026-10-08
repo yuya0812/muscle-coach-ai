@@ -33,3 +33,7 @@ Thumbs.db
 
 # Design handoff archive (extracted into design_handoff_ui_redesign/)
 Ai_.zip
+
+# Local-only task notes (kept on disk, excluded from the repository)
+NEXT_TASKS.md
+SESSION_HANDOFF_*.md

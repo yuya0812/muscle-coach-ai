@@ -46,26 +46,26 @@
 ## タスク分解
 
 ### Phase 1: recorder.ts の分離と欠損検出（1.5h）
-- [ ] `parseWorkoutText(text)`: AIパースのみ行い Exercise[] を返す関数に分離
-- [ ] `saveWorkout(userId, exercises, notes)`: 保存とサマリー生成を分離
-- [ ] 自重種目判定（正規表現リスト）と欠損検出ロジック
+- [x] `parseWorkoutText(text)`: AIパースのみ行い Exercise[] を返す関数に分離
+- [x] `saveWorkout(userId, exercises, notes)`: 保存とサマリー生成を分離
+- [x] 自重種目判定（正規表現リスト）と欠損検出ロジック
       （種目×フィールド単位で欠損を列挙。自重の weight は除外）
-- [ ] 既存 `parseAndSaveWorkout` 呼び出し元（webhook）の互換を確認
+- [x] 既存 `parseAndSaveWorkout` 呼び出し元（webhook）の互換を確認
 
 ### Phase 2: clarify ステートマシン（2h）
-- [ ] `RecordingState` に `step: "clarify"` と保留データ
+- [x] `RecordingState` に `step: "clarify"` と保留データ
       （pendingExercises / 残り質問キュー / notes 原文）を追加
-- [ ] `handleClarifyStep`: 回答解釈 → マージ → 次の質問 or 完了保存。
+- [x] `handleClarifyStep`: 回答解釈 → マージ → 次の質問 or 完了保存。
       解釈不能なら破棄して false を返す（webhook の通常処理に流す）
-- [ ] キャンセル（「キャンセル」テキスト）でも破棄できるようにする（既存フローと同じ）
-- [ ] 完了保存時: サマリー + マイルストーン処理（webhook record 経路と同じ後処理）
+- [x] キャンセル（「キャンセル」テキスト）でも破棄できるようにする（既存フローと同じ）
+- [x] 完了保存時: サマリー + マイルストーン処理（webhook record 経路と同じ後処理）
 
 ### Phase 3: webhook 接続と文言（1h）
-- [ ] webhook の record 経路を分岐つきに変更
+- [x] webhook の record 経路を分岐つきに変更
       （欠損なし→即保存 / 1〜2問→聞き返し開始 / 3問以上→案内のみ）
-- [ ] 定型質問文と Quick Reply の実装（上記方針どおり）
-- [ ] `npm run build` 通過確認
-- [ ] TESTING_CHECKLIST に聞き返しフローの確認項目を追記
+- [x] 定型質問文と Quick Reply の実装（上記方針どおり）
+- [x] `npm run build` 通過確認
+- [x] TESTING_CHECKLIST に聞き返しフローの確認項目を追記
       （不完全入力→聞き返し→保存 / 聞き返し中に別メッセージ→破棄 / 自重種目は聞かれない）
 
 ## リスク・懸念点

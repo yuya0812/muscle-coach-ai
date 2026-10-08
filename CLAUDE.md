@@ -277,7 +277,7 @@ LINE の `sender.name` は固定のサービス名 `"マッスルコーチ"`（�
 
 ## 関連ドキュメント
 
-- [NEXT_TASKS.md](NEXT_TASKS.md) — **セッション再開時はまずこれを読む。** 残タスクと進捗
+- `NEXT_TASKS.md` — **セッション再開時はまずこれを読む。** 残タスクと進捗（ローカル専用・`.gitignore` 対象でリポジトリには含まれない）
 - [AGENT_HANDOFF.md](AGENT_HANDOFF.md) — プロジェクト全詳細・引き継ぎ用
 - [TESTING_CHECKLIST.md](TESTING_CHECKLIST.md) — APIクレジット追加後の動作確認リスト
 - [design_handoff_ui_redesign/](design_handoff_ui_redesign/) — UIリデザイン仕様書 + プロトタイプ

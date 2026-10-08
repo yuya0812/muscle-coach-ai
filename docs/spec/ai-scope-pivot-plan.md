@@ -36,42 +36,42 @@
 ## タスク分解
 
 ### Phase 0: 安全網（30分）
-- [ ] 現在の状態でブランチを切る（`git switch -c feat/ai-scope-pivot`）。main 直は避け、まとまったらマージ判断
-- [ ] 削除前スナップショット確認（8d4ef91 が直前コミット）。各 Phase 末でコミット
+- [x] 現在の状態でブランチを切る（`git switch -c feat/ai-scope-pivot`）。main 直は避け、まとまったらマージ判断
+- [x] 削除前スナップショット確認（8d4ef91 が直前コミット）。各 Phase 末でコミット
 
 ### Phase 1: 分析・マイルストーンの「コード集計 + AI言語化」基盤（中心作業・3〜4h）
-- [ ] `history.ts` に不足する集計を追加：初期 vs 最近の重量・回数差（成長トレンド）、頻度・偏りの判定
-- [ ] 「集計値を渡して言語化させる」プロンプトを新設（数値捏造禁止・与えられた数値のみ使用を明記）
-- [ ] 分析機能の本体関数を新設（集計→言語化）。マイルストーン(5/15/30)と通常分析で共通利用
-- [ ] `recordingFlow.ts` の `generateMilestoneContent` を新基盤に載せ替え（旧 WEAK_POINT 等の直叩きを廃止）
+- [x] `history.ts` に不足する集計を追加：初期 vs 最近の重量・回数差（成長トレンド）、頻度・偏りの判定
+- [x] 「集計値を渡して言語化させる」プロンプトを新設（数値捏造禁止・与えられた数値のみ使用を明記）
+- [x] 分析機能の本体関数を新設（集計→言語化）。マイルストーン(5/15/30)と通常分析で共通利用
+- [x] `recordingFlow.ts` の `generateMilestoneContent` を新基盤に載せ替え（旧 WEAK_POINT 等の直叩きを廃止）
 
 ### Phase 2: コーチング会話・メニューの削除（2〜3h）
-- [ ] `workout/menuGenerator.ts` を削除し、参照（webhook/onboarding/trainer）を除去
-- [ ] `ai/trainer.ts` の form/progress/nutrition/general/menu ハンドラを削除。
+- [x] `workout/menuGenerator.ts` を削除し、参照（webhook/onboarding/trainer）を除去
+- [x] `ai/trainer.ts` の form/progress/nutrition/general/menu ハンドラを削除。
       `getTrainerResponse` を「record / analyze / greeting」だけ捌く形に縮小（or webhook 側へ吸収）
-- [ ] `intentClassifier.ts` を record/analyze/greeting/other に縮小
-- [ ] `ai/prompts.ts` から不要プロンプト削除（WORKOUT_PARSE と新分析プロンプトは残す）
-- [ ] `webhook.ts` のメニュー/会話コマンド・待機メッセージ分岐を整理。記録・分析・履歴・記録フローを残す
-- [ ] ビルド通過確認
+- [x] `intentClassifier.ts` を record/analyze/greeting/other に縮小
+- [x] `ai/prompts.ts` から不要プロンプト削除（WORKOUT_PARSE と新分析プロンプトは残す）
+- [x] `webhook.ts` のメニュー/会話コマンド・待機メッセージ分岐を整理。記録・分析・履歴・記録フローを残す
+- [x] ビルド通過確認
 
 ### Phase 3: キャラ削除（2h）
-- [ ] webhook/recordingFlow/onboarding/scheduledNotifications の `getTrainer`・thinkingMessage・
+- [x] webhook/recordingFlow/onboarding/scheduledNotifications の `getTrainer`・thinkingMessage・
       sender.name へのキャラ名注入を除去（sender 自体を外すか、固定名にするかは実装時判断）
-- [ ] `scheduledNotifications.ts` のキャラ別リマインダーを汎用文言1種に差し替え
-- [ ] `onboardingFlow.ts` のキャラ選択ステップを撤去し、ステップ数・確認画面を調整
-- [ ] `trainerCharacter.ts` を削除（全参照除去後）
-- [ ] `trainerType`/`trainerName` はフィールド残置のまま新規参照ゼロを確認
-- [ ] ビルド通過確認
+- [x] `scheduledNotifications.ts` のキャラ別リマインダーを汎用文言1種に差し替え
+- [x] `onboardingFlow.ts` のキャラ選択ステップを撤去し、ステップ数・確認画面を調整
+- [x] `trainerCharacter.ts` を削除（全参照除去後）
+- [x] `trainerType`/`trainerName` はフィールド残置のまま新規参照ゼロを確認
+- [x] ビルド通過確認
 
 ### Phase 4: ドキュメント・テスト更新（1h）
-- [ ] CLAUDE.md の設計原則を「LIFF=閲覧 / LINE=記録の入口＋分析の言語化」に改訂、キャラ記述を整理
-- [ ] AGENT_HANDOFF.md / NEXT_TASKS.md / TESTING_CHECKLIST.md を新方針に合わせて更新
-- [ ] 動作確認手順（記録・分析・マイルストーン作り替え）を TESTING_CHECKLIST に追記
+- [x] CLAUDE.md の設計原則を「LIFF=閲覧 / LINE=記録の入口＋分析の言語化」に改訂、キャラ記述を整理
+- [x] AGENT_HANDOFF.md / NEXT_TASKS.md / TESTING_CHECKLIST.md を新方針に合わせて更新
+- [x] 動作確認手順（記録・分析・マイルストーン作り替え）を TESTING_CHECKLIST に追記
 
 ### Phase 5: レビュー・デプロイ（承認後）
-- [ ] Codex レビュー（セカンドオピニオン、設計大変更のため必須）
-- [ ] 指摘対応 → ビルド
-- [ ] ユーザー承認後にコミット集約 → デプロイ（AI関数群）
+- [x] Codex レビュー（セカンドオピニオン、設計大変更のため必須）
+- [x] 指摘対応 → ビルド
+- [x] ユーザー承認後にコミット集約 → デプロイ（AI関数群）
 
 ## リスク・懸念点
 
