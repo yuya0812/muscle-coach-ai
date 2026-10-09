@@ -1,3 +1,5 @@
+import { isDemoMode, DEMO_HIDDEN_PATHS } from '../demo/demoMode'
+
 export interface TourStep {
   path: string
   target: string
@@ -5,7 +7,7 @@ export interface TourStep {
   body: string
 }
 
-export const TOUR_STEPS: TourStep[] = [
+const ALL_STEPS: TourStep[] = [
   // Dashboard
   { path: '/dashboard', target: 'dashboard-summary', title: '今週・今月の状況', body: '今週のトレーニング回数と、今月のAI分析の残り回数がここに表示されます。' },
   { path: '/dashboard', target: 'dashboard-record-cta', title: 'LINEでサッと記録', body: '「ベンチプレス 60kg 10回 3セット」のようにLINEへ送るだけで記録されます。足りない情報はその場で聞き返します。' },
@@ -35,3 +37,10 @@ export const TOUR_STEPS: TourStep[] = [
   // BottomNav (last)
   { path: '/dashboard', target: 'nav-bar', title: '画面切替はここから', body: '下のタブで画面を切り替えられます。セット間の休憩はタイマーが便利です。次回からあなた専用のホーム画面として使ってください。' },
 ]
+
+// デモでは設定・プラン画面を出さないため、その画面のステップを除き、残り回数の説明も外す
+export const TOUR_STEPS: TourStep[] = isDemoMode()
+  ? ALL_STEPS.filter((s) => !DEMO_HIDDEN_PATHS.includes(s.path)).map((s) =>
+      s.target === 'dashboard-summary' ? { ...s, title: '今週の状況', body: '今週のトレーニング回数がここに表示されます。' } : s,
+    )
+  : ALL_STEPS

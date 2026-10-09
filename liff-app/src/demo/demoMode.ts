@@ -6,7 +6,10 @@ const DEMO_FLAG = 'demo_mode'
 
 export const DEMO_USER_ID = 'demo-user'
 
-let demo = false
+// デモでは課金・個人ステータスに関わる画面を出さない（動きを見せることが目的のため）
+export const DEMO_HIDDEN_PATHS = ['/profile', '/subscribe']
+
+let demo: boolean | null = null
 
 function readFlag(): boolean {
   try {
@@ -41,5 +44,7 @@ export function bootstrapDemoMode(): void {
 }
 
 export function isDemoMode(): boolean {
+  // bootstrapDemoMode より先に評価されるモジュール（ツアー定義など）からも呼べるよう遅延評価する
+  if (demo === null) demo = window.location.pathname === '/demo' || readFlag()
   return demo
 }

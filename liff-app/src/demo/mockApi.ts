@@ -248,11 +248,6 @@ export async function handleDemoRequest(path: string, options?: RequestInit): Pr
       state.profile = { ...state.profile, settings: { ...state.profile.settings, ...rest } }
       return { success: true }
     }
-    case 'GET /api/subscription':
-      return { plan: 'free' }
-    case 'POST /api/stripe/checkout':
-    case 'POST /api/stripe/portal':
-      return { url: 'demo:checkout' }
     case 'GET /api/workouts/exercises/recent': {
       const exclude = new Set((url.searchParams.get('exclude') ?? '').split(',').filter(Boolean))
       const limit = Number(url.searchParams.get('limit') ?? 6)

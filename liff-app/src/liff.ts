@@ -1,6 +1,6 @@
 import liff from '@line/liff'
 import { isDemoMode, DEMO_USER_ID } from './demo/demoMode'
-import { showLinePreview, showDemoNotice } from './demo/linePreview'
+import { showLinePreview } from './demo/linePreview'
 
 const LIFF_ID = import.meta.env.VITE_LIFF_ID as string
 
@@ -58,10 +58,6 @@ export function closeLiff(): void {
  * 利用規約・プライバシーポリシー等の静的ページや Stripe Checkout を開く時に使用。
  */
 export function openExternalUrl(url: string): void {
-  if (url.startsWith('demo:')) {
-    showDemoNotice('デモでは決済画面には進みません（本番は Stripe Checkout が開きます）')
-    return
-  }
   if (liff.isInClient()) {
     liff.openWindow({ url, external: true })
   } else {

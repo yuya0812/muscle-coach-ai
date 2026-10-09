@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { initLiff, getLiffUser, type LiffUser } from './liff'
+import { isDemoMode } from './demo/demoMode'
 import Header from './components/Header'
 import BottomNav from './components/BottomNav'
 import Loading from './components/Loading'
@@ -78,8 +79,8 @@ export default function App() {
             <Route path="/onboarding" element={<Onboarding userId={user.userId} />} />
             <Route path="/setup" element={<Setup userId={user.userId} />} />
             <Route path="/dashboard" element={<Dashboard userId={user.userId} />} />
-            <Route path="/subscribe" element={<Subscribe userId={user.userId} />} />
-            <Route path="/profile" element={<Profile userId={user.userId} />} />
+            <Route path="/subscribe" element={isDemoMode() ? <Navigate to="/dashboard" replace /> : <Subscribe userId={user.userId} />} />
+            <Route path="/profile" element={isDemoMode() ? <Navigate to="/dashboard" replace /> : <Profile userId={user.userId} />} />
             <Route path="/workout-input" element={<WorkoutInput userId={user.userId} />} />
             <Route path="/workout-log" element={<WorkoutLog userId={user.userId} />} />
             <Route path="/timer" element={<Timer />} />

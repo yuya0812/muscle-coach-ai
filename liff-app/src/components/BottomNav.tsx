@@ -1,6 +1,7 @@
 import { useLocation, useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 import { theme } from '../theme'
+import { isDemoMode, DEMO_HIDDEN_PATHS } from '../demo/demoMode'
 
 const Nav = styled.nav`
   position: fixed;
@@ -102,7 +103,7 @@ export default function BottomNav() {
 
   return (
     <Nav data-tour-id="nav-bar">
-      {tabs.map((t) => {
+      {tabs.filter((t) => !(isDemoMode() && DEMO_HIDDEN_PATHS.includes(t.path))).map((t) => {
         const active = location.pathname === t.path
         return (
           <NavItem

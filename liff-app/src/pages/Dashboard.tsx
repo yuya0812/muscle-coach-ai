@@ -16,6 +16,7 @@ import { Line, Radar } from 'react-chartjs-2'
 import { theme } from '../theme'
 import { getDashboardData, getUsageStatus, getMilestones, getAnalysisSummary, type DashboardData, type MilestoneStatus, type AnalysisSummary } from '../api'
 import { closeLiff, sendMessageAndCloseLiff } from '../liff'
+import { isDemoMode } from '../demo/demoMode'
 import Loading from '../components/Loading'
 
 ChartJS.register(
@@ -670,7 +671,7 @@ export default function Dashboard({ userId }: { userId: string }) {
             <SummaryUnit>回</SummaryUnit>
           </SummaryNumberRow>
         </SummaryLeft>
-        {remaining !== undefined && (
+        {remaining !== undefined && !isDemoMode() && (
           <GoldBox>
             <GoldLabel>今週の分析残り</GoldLabel>
             <GoldNumberRow>

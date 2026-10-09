@@ -116,13 +116,3 @@ export function showLinePreview(sentText?: string): void {
   backdrop.append(card)
   document.body.append(backdrop)
 }
-
-export function showDemoNotice(message: string): void {
-  const toast = el('div', {
-    position: 'fixed', left: '50%', bottom: '96px', transform: 'translateX(-50%)', zIndex: '100000',
-    maxWidth: 'calc(100% - 32px)', padding: '10px 16px', borderRadius: '11px', fontSize: '13px',
-    background: theme.colors.surface2, color: theme.colors.text, border: `1px solid ${theme.colors.goldBorder}`,
-  }, message)
-  document.body.append(toast)
-  setTimeout(() => toast.remove(), 2800)
-}
