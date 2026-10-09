@@ -9,7 +9,13 @@ LINE に「ベンチ60キロ10回3セット」と雑に送るだけで筋トレ�
 - **集客:** X 自動投稿 → LINE 友だち追加 → LIFF で記録を閲覧
 - **ステータス:** 個人開発として一通り完成（2026-10 時点で開発を一区切り）
 
-ランディングページ: https://muscle-coach-ai.web.app/lp.html
+| | URL |
+|---|---|
+| デモ（LINE ログイン不要・サンプルデータ） | https://muscle-coach-ai.web.app/demo |
+| ランディングページ | https://muscle-coach-ai.web.app/lp.html |
+
+デモでは本体の LIFF アプリをサンプルデータで操作できる。記録の保存はブラウザのメモリ上だけで行われ、
+「LINE で記録する」「分析してもらう」を押すと、本番の LINE トークで返ってくる内容をプレビュー表示する。
 
 ---
 
@@ -129,6 +135,7 @@ liff-app/src/
   pages/           Dashboard / WorkoutInput / WorkoutLog / Timer / Profile / Setup / Subscribe / Onboarding
   components/      Header / BottomNav / TermsGate（規約同意）など共通 UI
   tour/            初回プロダクトツアー
+  demo/            ポートフォリオ用デモモード（/demo で起動、API をサンプルデータに差し替え）
   api.ts           REST API クライアント（全リクエストに LIFF Token を付与）
 
 docs/spec/         機能ごとの spec（要件）と plan（実装計画）

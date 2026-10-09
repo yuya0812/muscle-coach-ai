@@ -1,4 +1,6 @@
 import liff from '@line/liff'
+import { isDemoMode } from './demo/demoMode'
+import { handleDemoRequest } from './demo/mockApi'
 
 const API_URL = import.meta.env.VITE_API_URL as string
 
@@ -12,6 +14,7 @@ function getAuthHeaders(): HeadersInit {
 }
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  if (isDemoMode()) return handleDemoRequest(path, options) as Promise<T>
   const res = await fetch(`${API_URL}${path}`, {
     headers: getAuthHeaders(),
     ...options,

@@ -1,4 +1,6 @@
 import liff from '@line/liff'
+import { isDemoMode, DEMO_USER_ID } from './demo/demoMode'
+import { showLinePreview, showDemoNotice } from './demo/linePreview'
 
 const LIFF_ID = import.meta.env.VITE_LIFF_ID as string
 
@@ -12,6 +14,10 @@ let initialized = false
 
 export async function initLiff(): Promise<void> {
   if (initialized) return
+  if (isDemoMode()) {
+    initialized = true
+    return
+  }
   await liff.init({ liffId: LIFF_ID })
   initialized = true
 
@@ -28,6 +34,7 @@ export async function initLiff(): Promise<void> {
 }
 
 export async function getLiffUser(): Promise<LiffUser> {
+  if (isDemoMode()) return { userId: DEMO_USER_ID, displayName: 'デモユーザー' }
   const profile = await liff.getProfile()
   return {
     userId: profile.userId,
@@ -37,6 +44,10 @@ export async function getLiffUser(): Promise<LiffUser> {
 }
 
 export function closeLiff(): void {
+  if (isDemoMode()) {
+    showLinePreview()
+    return
+  }
   if (liff.isInClient()) {
     liff.closeWindow()
   }
@@ -47,6 +58,10 @@ export function closeLiff(): void {
  * 利用規約・プライバシーポリシー等の静的ページや Stripe Checkout を開く時に使用。
  */
 export function openExternalUrl(url: string): void {
+  if (url.startsWith('demo:')) {
+    showDemoNotice('デモでは決済画面には進みません（本番は Stripe Checkout が開きます）')
+    return
+  }
   if (liff.isInClient()) {
     liff.openWindow({ url, external: true })
   } else {
@@ -60,6 +75,10 @@ export function openExternalUrl(url: string): void {
  * スコープ未付与・送信失敗時はエラーを飲み込み、closeWindowだけ実行する。
  */
 export async function sendMessageAndCloseLiff(text: string): Promise<void> {
+  if (isDemoMode()) {
+    showLinePreview(text)
+    return
+  }
   if (!liff.isInClient()) {
     closeLiff()
     return
