@@ -88,7 +88,7 @@ LINE ユーザー ──▶ LINE Messaging API ──▶ lineWebhook (Functions 
 | レイヤー | 技術 |
 |---|---|
 | フロントエンド | React 19 / TypeScript / Vite / Styled Components / Chart.js / LIFF SDK |
-| バックエンド | Firebase Functions v2（Node 20, TypeScript） |
+| バックエンド | Firebase Functions v2（Node 22, TypeScript） |
 | DB | Cloud Firestore（asia-northeast1） |
 | AI | Claude API（記録パース・意図分類は Haiku 4.5、分析の言語化は Sonnet 4.6 とタスク別に使い分け） |
 | 認証 | LIFF Access Token をサーバ側で検証 + Firebase Anonymous Auth |
@@ -154,7 +154,7 @@ docs/spec/         機能ごとの spec（要件）と plan（実装計画）
 
 ## ローカルでの動かし方
 
-前提: Node.js 20、Firebase CLI、LINE 公式アカウント（Messaging API / LIFF）、Anthropic API キー、Stripe アカウント。
+前提: Node.js 22、Firebase CLI、LINE 公式アカウント（Messaging API / LIFF）、Anthropic API キー、Stripe アカウント。
 
 ```bash
 # バックエンド

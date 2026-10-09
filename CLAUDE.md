@@ -71,7 +71,7 @@
 | レイヤー | 技術 |
 |---|---|
 | フロントエンド | React 19 + TypeScript + Styled Components + Chart.js（[liff-app/](liff-app/)） |
-| バックエンド | Firebase Functions v2（Node 20）（[functions/](functions/)） |
+| バックエンド | Firebase Functions v2（Node 22）（[functions/](functions/)） |
 | DB | Cloud Firestore（asia-northeast1） |
 | AI | Claude API（claude-sonnet-4-6） |
 | 認証 | Firebase Anonymous Auth + LIFF Token |
